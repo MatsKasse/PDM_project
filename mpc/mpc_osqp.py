@@ -81,7 +81,7 @@ class LinearMPCOSQP:
         
         self.z_prev = None # warm start storage
 
-    def build_qp(self, x_init, x_ref, u_ref):
+    def build_qp(self, x_init, x_ref, u_ref):   #convert mpc formulation into OSQP required QP formulation
         """
         x_ref: (N+1,3)
         u_ref: (N,2)
@@ -100,11 +100,10 @@ class LinearMPCOSQP:
         nZ = nX + nU # Decision variable has all states and actions of the horizon in one vector.
 
         # --- cost H, q ---
-        Hx_blocks = [sp.kron(sp.eye(N), sp.csc_matrix(self.Q)),
-                     sp.csc_matrix(self.P)]
-        Hx = sp.block_diag(Hx_blocks, format='csc')  # (nX,nX)
-        Hu = sp.kron(sp.eye(N), sp.csc_matrix(self.R), format='csc')
-        H = sp.block_diag([Hx, Hu], format='csc')
+        Hx_blocks = [sp.kron(sp.eye(N), sp.csc_matrix(self.Q)), sp.csc_matrix(self.P)] 
+        Hx = sp.block_diag(Hx_blocks, format='csc')  # State Cost
+        Hu = sp.kron(sp.eye(N), sp.csc_matrix(self.R), format='csc')    # Control Cost
+        H = sp.block_diag([Hx, Hu], format='csc') #Cost matrix
 
         # linear term: -2*Q*x_ref etc. (in 0.5 z^T H z + q^T z form)
         qx = np.zeros(nX)
