@@ -2,8 +2,7 @@ import numpy as np
 import scipy.sparse as sp
 import osqp
 
-def wrap_angle(a):
-    return (a + np.pi) % (2*np.pi) - np.pi
+
 
 def linearize_unicycle(xbar, ubar, Ts):
     """
@@ -21,7 +20,6 @@ def linearize_unicycle(xbar, ubar, Ts):
     A[0,2] = -Ts * v * np.sin(th)
     A[1,2] =  Ts * v * np.cos(th)
 
-
     B = np.zeros((3,2))
     B[0,0] = Ts * np.cos(th)
     B[1,0] = Ts * np.sin(th)
@@ -35,7 +33,6 @@ def linearize_unicycle(xbar, ubar, Ts):
     ])
     c = f - A@xbar - B@ubar
     return A, B, c
-
 
 
 class LinearMPCOSQP:
@@ -77,12 +74,70 @@ class LinearMPCOSQP:
 
         self.prob = osqp.OSQP() #OSQP solver object
         self._is_setup = False #parameter
-
         
         self.z_prev = None # warm start storage
 
-    def build_qp(self, x_init, x_ref, u_ref):   #convert mpc formulation into OSQP required QP formulation
+    def _build_dynamics_constraints(self, x_init, A_list, B_list, c_list, nZ):
+        """Build equality constraints for dynamics: x0 = x_init and x_{k+1} = A_k x_k + B_k u_k + c_k"""
+        N, nx, nu = self.N, self.nx, self.nu
+        nX = (N+1)*nx
+        
+        nEq = (N+1)*nx  # include x0 equality
+        Aeq = sp.lil_matrix((nEq, nZ))
+
+        # x0 = x_init
+        Aeq[0:nx, 0:nx] = sp.eye(nx)
+
+        # dynamics
+        for k in range(N):
+            row = (k+1)*nx
+            col_xk   = k*nx
+            col_xkp1 = (k+1)*nx
+            col_uk   = nX + k*nu
+
+            Aeq[row:row+nx, col_xkp1:col_xkp1+nx] = sp.eye(nx)
+            Aeq[row:row+nx, col_xk:col_xk+nx] = -A_list[k]
+            Aeq[row:row+nx, col_uk:col_uk+nu] = -B_list[k]
+
+        Aeq = Aeq.tocsc()
+        
+        leq = np.zeros(nEq)
+        ueq = np.zeros(nEq)
+
+        leq[0:nx] = x_init
+        ueq[0:nx] = x_init
+
+        for k in range(N):
+            row = (k+1)*nx
+            leq[row:row+nx] = c_list[k]
+            ueq[row:row+nx] = c_list[k]
+        
+        return Aeq, leq, ueq
+
+    def _build_control_constraints(self, nZ):
+        """Build inequality constraints for control inputs: vmin<=v<=vmax, |w|<=wmax"""
+        N, nx, nu = self.N, self.nx, self.nu
+        nX = (N+1)*nx
+        nU = N*nu
+        
+        nIneq = nU
+        Aineq = sp.lil_matrix((nIneq, nZ))
+        Aineq[:, nX:nX+nU] = sp.eye(nU)
+        Aineq = Aineq.tocsc()
+
+        l_in = np.zeros(nU)
+        u_in = np.zeros(nU)
+        for k in range(N):
+            l_in[k*nu + 0] = self.vmin
+            u_in[k*nu + 0] = self.vmax
+            l_in[k*nu + 1] = -self.wmax
+            u_in[k*nu + 1] =  self.wmax
+        
+        return Aineq, l_in, u_in
+
+    def build_qp(self, x_init, x_ref, u_ref):
         """
+        Convert MPC formulation into OSQP required QP formulation.
         x_ref: (N+1,3)
         u_ref: (N,2)
         """
@@ -115,65 +170,41 @@ class LinearMPCOSQP:
             qu[k*nu:(k+1)*nu] = -self.R @ u_ref[k]
         q = np.concatenate([qx, qu])
 
-        # --- constraints ---
-        # 1) Dynamics equalities:
-        # x0 = x_init
-        # x_{k+1} - A_k x_k - B_k u_k = c_k
-        nEq = (N+1)*nx  # include x0 equality
-        Aeq = sp.lil_matrix((nEq, nZ))
-
-        # x0 = x_init
-        Aeq[0:nx, 0:nx] = sp.eye(nx)
-
-        # dynamics
-        for k in range(N):
-            row = (k+1)*nx
-            col_xk   = k*nx
-            col_xkp1 = (k+1)*nx
-            col_uk   = nX + k*nu
-
-            Aeq[row:row+nx, col_xkp1:col_xkp1+nx] = sp.eye(nx)
-            Aeq[row:row+nx, col_xk:col_xk+nx] = -A_list[k]
-            Aeq[row:row+nx, col_uk:col_uk+nu] = -B_list[k]
-
-        Aeq = Aeq.tocsc()
-        leq = np.zeros(nEq)
-        ueq = np.zeros(nEq)
-
-        leq[0:nx] = x_init
-        ueq[0:nx] = x_init
-
-        for k in range(N):
-            row = (k+1)*nx
-            leq[row:row+nx] = c_list[k]
-            ueq[row:row+nx] = c_list[k]
-
-        # 2) Input box constraints (vmin<=v<=vmax, |w|<=wmax)
-        # Only on u part, implemented via additional rows selecting u
-        nIneq = nU
-        Aineq = sp.lil_matrix((nIneq, nZ))
-        Aineq[:, nX:nX+nU] = sp.eye(nU)
-        Aineq = Aineq.tocsc()
-
-        l_in = np.zeros(nU)
-        u_in = np.zeros(nU)
-        for k in range(N):
-            l_in[k*nu + 0] = self.vmin
-            u_in[k*nu + 0] = self.vmax
-            l_in[k*nu + 1] = -self.wmax
-            u_in[k*nu + 1] =  self.wmax
-
-        # stack constraints
-        Acons = sp.vstack([Aeq, Aineq], format='csc')
-        l = np.concatenate([leq, l_in])
-        u = np.concatenate([ueq, u_in])
+        # --- Build constraints modularly ---
+        constraint_list = []
+        l_list = []
+        u_list = []
+        
+        # 1) Dynamics constraints (always included)
+        Aeq, leq, ueq = self._build_dynamics_constraints(x_init, A_list, B_list, c_list, nZ)
+        constraint_list.append(Aeq)
+        l_list.append(leq)
+        u_list.append(ueq)
+        
+        # 2) Control input constraints (always included)
+        Aineq, l_in, u_in = self._build_control_constraints(nZ)
+        constraint_list.append(Aineq)
+        l_list.append(l_in)
+        u_list.append(u_in)
+        
+        # 3) Add more constraints here as needed
+        # Example: if hasattr(self, 'use_state_constraints') and self.use_state_constraints:
+        #     Astate, l_state, u_state = self._build_state_constraints(nZ)
+        #     constraint_list.append(Astate)
+        #     l_list.append(l_state)
+        #     u_list.append(u_state)
+        
+        # Stack all constraints
+        Acons = sp.vstack(constraint_list, format='csc')
+        l = np.concatenate(l_list)
+        u = np.concatenate(u_list)
 
         return H, q, Acons, l, u, nZ
 
     def solve(self, x_init, x_ref, u_ref):
         H, q, A, l, u, nZ = self.build_qp(x_init, x_ref, u_ref)
 
-            # 1) eerste keer of sparsity veranderd? -> volledige setup
+        # 1) eerste keer of sparsity veranderd? -> volledige setup
         if (not self._is_setup) or (getattr(self, "_A_nnz", None) != A.nnz):
             self.prob = osqp.OSQP()
             self.prob.setup(P=H, q=q, A=A, l=l, u=u,
@@ -190,15 +221,15 @@ class LinearMPCOSQP:
             self.prob.warm_start(x=self.z_prev)
 
         res = self.prob.solve()
-        if res.info.status_val not in (1, 2):  # 1=solved, 2=solved inaccurate
-            # fallback: stop veilig
+        if res.info.status_val not in (1, 2):  # 1=solved, 2=solved inaccurate (information)
+            # fallback: stop veilig als status = 3 of 4
             return np.array([0.0, 0.0]), res
 
-        z = res.x
+        z = res.x # optimal solution vector z
         self.z_prev = z
 
         # extract u0
         nx = self.nx
         nX = (self.N+1)*nx
-        u0 = z[nX:nX+self.nu]
+        u0 = z[nX:nX+self.nu] # extract first controll input [v,w]
         return u0, res

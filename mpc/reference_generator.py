@@ -94,26 +94,38 @@ class PolylineReference:
         return xr, ur
 
 
-def make_test_path(kind="L", length=3.0):
+
+
+def create_aligned_path(x0, y0, theta0, path_type="straight", length=3.0):
     """
-    Create test paths for simulation.
-    
-    Args:
-        kind: Path type - "straight", "L", or "S"
-        length: Approximate path length
+    Create a path aligned with the robot's initial heading.
     """
-    if kind == "straight":
-        return np.array([[0.0, 0], [0.0, -length]])
+    if path_type == "straight":
+        local_path = np.array([[0.0, 0.0], [length, 0.0]])
+    elif path_type == "L":
+        local_path = np.array([
+            [0.0, 0.0],
+            [length, 0.0],
+            [length, length]
+        ])
+    elif path_type == "S":
+        x = np.linspace(0, length, 60)
+        y = 0.4 * np.sin(2 * np.pi * x / length)
+        local_path = np.column_stack([x, y])
+    else:
+        raise ValueError(f"Unknown path type: {path_type}")
     
-    if kind == "L":
-        return np.array([[0.0, 0.0], [0.0, -length], [-length, -length]])
+    # Rotate to match robot heading
+    cos_th = np.cos(theta0)
+    sin_th = np.sin(theta0)
+    rotation_matrix = np.array([[cos_th, -sin_th],
+                                [sin_th,  cos_th]])
     
-    if kind == "S":
-        xs = np.linspace(0, 8, 60)
-        ys = 1.0 + 0.6*np.sin(0.7*xs)
-        return np.column_stack([xs, ys])
+    rotated_path = local_path @ rotation_matrix.T
+    global_path = rotated_path + np.array([x0, y0])
     
-    raise ValueError(f"Unknown path kind: {kind}")
+    return global_path
+
 
 
 def draw_polyline(points_xy, z=0.02, line_width=2.0, life_time=0):
