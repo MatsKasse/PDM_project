@@ -3,12 +3,12 @@ import numpy as np
 import pybullet as p
 
 from urdfenvs.robots.generic_urdf.generic_diff_drive_robot import GenericDiffDriveRobot
-from urdfenvs.scene_examples.my_obstacles import *
+from my_obstacles import *
 from urdfenvs.urdf_common.urdf_env import UrdfEnv
 
-from urdfenvs.reference_generatorV3 import PolylineReference, make_test_path, draw_polyline, clear_debug_items, wrap_angle
-from urdfenvs.albert_controlV3 import extract_base_state, build_action, set_robot_body_id
-from urdfenvs.mpc_osqp import LinearMPCOSQP
+from mpc.reference_generator import PolylineReference, make_test_path, draw_polyline, clear_debug_items, wrap_angle
+from mpc.albert_control import extract_base_state, build_action, set_robot_body_id
+from mpc.mpc_osqp import LinearMPCOSQP
 
 
 # def find_robot_body_id():
