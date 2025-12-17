@@ -3,6 +3,7 @@ import gymnasium as gym
 import numpy as np
 import Gridmap as gm
 import pybullet as p
+import random
 from urdfenvs.robots.generic_urdf.generic_diff_drive_robot import GenericDiffDriveRobot
 from urdfenvs.urdf_common.urdf_env import UrdfEnv
 from my_obstacles import *
@@ -15,6 +16,8 @@ sx = 16.0
 sy = 2.5
 gx = 1.0
 gy = 12.5
+
+visits = 3
 
 resolution = 0.09
 
@@ -54,7 +57,13 @@ def run_albert(n_steps=1000, render=False, goal=True, obstacles=True):
     )
 
     
-
+    def get_distance(path_x, path_y):
+        path = np.column_stack((path_x, path_y))
+        distance = 0
+        for i in range(len(path_x)-1):
+            distance += np.linalg.norm(path[i]-path[i+1])
+        return np.round(distance, 3)
+    
     def show_solution(grid, rx, ry):
         start_grid = (sx, sy)
         goal_grid = (gx, gy)
@@ -69,7 +78,7 @@ def run_albert(n_steps=1000, render=False, goal=True, obstacles=True):
 
         px, py = zip(*path_grid)
         ax.plot(px, py, '-r', linewidth=2)
-
+        ax.set_title('A* path with length %1.3fm' %distance)
         ax.grid(True)
         plt.show()
 
@@ -87,12 +96,27 @@ def run_albert(n_steps=1000, render=False, goal=True, obstacles=True):
     grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution)
 
     sx_g, sy_g = world_to_grid(sx, sy)
-    gx_g, gy_g = world_to_grid(gx, gy)
+    
+    
+    gx, gy = np.zeros(visits), np.zeros(visits)
+    gx_g, gy_g = np.zeros(visits), np.zeros(visits)
+
+    pot_x, pot_y = np.where(inflated_grid == 0)
+    pos = np.column_stack((pot_x, pot_y))
+    indices = np.random.choice(len(pos), size=visits, replace=False)
+    
+    for i, idx in enumerate(indices):
+        gx_g[i], gy_g[i] = pos[idx]
+        gx[i], gy[i] = grid_to_world(gx_g[i], gy_g[i])
+    
+
 
     A_star = AStarPlanner(resolution, 0.3, inflated_grid, x_min, y_min)
-    rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g, gy_g)
+    rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g[0], gy_g[0])
     rx_w, ry_w = zip(*[grid_to_world(x, y) for x, y in zip(rx_g, ry_g)])
 
+    distance = get_distance(rx_w, ry_w)
+    print(distance)
     show_solution(grid, rx_w, ry_w)
 
     def get_action(iter):
