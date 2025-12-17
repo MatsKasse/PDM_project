@@ -3,11 +3,30 @@ import gymnasium as gym
 import numpy as np
 import Gridmap as gm
 import pybullet as p
-#import A_star
 from urdfenvs.robots.generic_urdf.generic_diff_drive_robot import GenericDiffDriveRobot
 from urdfenvs.urdf_common.urdf_env import UrdfEnv
 from my_obstacles import *
+from a_star import *
 
+x_min = 0
+y_min = 0
+
+sx = 16.0
+sy = 2.5
+gx = 1.0
+gy = 12.5
+
+resolution = 0.09
+
+def world_to_grid(x, y):
+    x_g = int((x - x_min) / resolution)
+    y_g = int((y - y_min) / resolution)
+    return x_g, y_g
+
+def grid_to_world(x_g, y_g):
+    x = (x_g) * resolution + x_min
+    y = (y_g) * resolution + y_min
+    return x, y
 
 def run_albert(n_steps=1000, render=False, goal=True, obstacles=True):
     robots = [
@@ -34,27 +53,26 @@ def run_albert(n_steps=1000, render=False, goal=True, obstacles=True):
         pos=np.array([0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.5, 0.0, 1.8, 0.5])
     )
 
-    for i in range(p.getNumBodies()):
-        body_id = p.getBodyUniqueId(i)
-        body_info = p.getBodyInfo(body_id)
+    
 
-        body_name = body_info[1].decode("utf-8")
-        print(body_id, body_name)
+    def show_solution(grid, rx, ry):
+        start_grid = (sx, sy)
+        goal_grid = (gx, gy)
+        path_grid = [(rx[i], ry[i]) for i in range(len(rx))]
 
+        fig, ax = plt.subplots()
+    
+        ax.imshow(grid, cmap='Greys', vmin=0, vmax=1, interpolation="nearest", origin='lower', extent=[0, grid.shape[1]*resolution, 0, grid.shape[0]*resolution])
 
-    robot_id = 1
+        ax.plot(start_grid[0], start_grid[1], 'go', markersize=10)  # green circle for start
+        ax.plot(goal_grid[0], goal_grid[1], 'ro', markersize=10)    # red circle for goal
 
-    aabb_min, aabb_max = p.getAABB(robot_id)
+        px, py = zip(*path_grid)
+        ax.plot(px, py, '-r', linewidth=2)
 
-    dimensions = [
-        aabb_max[0] - aabb_min[0],  # x size
-        aabb_max[1] - aabb_min[1],  # y size
-        aabb_max[2] - aabb_min[2],  # z size
-    ]
+        ax.grid(True)
+        plt.show()
 
-    print("Robot dimensions (x, y, z):", dimensions)
-
-    print(f"Initial observation : {ob}")
     for wall in wall_obstacles:
         env.add_obstacle(wall)
     for cylinder in cylinder_obstacles:
@@ -66,10 +84,16 @@ def run_albert(n_steps=1000, render=False, goal=True, obstacles=True):
     x_min, y_min, _ = world_min
     x_max, y_max, _ = world_max
 
-    print('x_min = ', x_min)
-    print('x_max = ', x_max)
+    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution)
 
-    gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=0.10)
+    sx_g, sy_g = world_to_grid(sx, sy)
+    gx_g, gy_g = world_to_grid(gx, gy)
+
+    A_star = AStarPlanner(resolution, 0.3, inflated_grid, x_min, y_min)
+    rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g, gy_g)
+    rx_w, ry_w = zip(*[grid_to_world(x, y) for x, y in zip(rx_g, ry_g)])
+
+    show_solution(grid, rx_w, ry_w)
 
     def get_action(iter):
         if iter % 50 == 0:
@@ -96,3 +120,4 @@ if __name__ == "__main__":
     with warnings.catch_warnings():
         warnings.filterwarnings(warning_flag)
         run_albert(render=True)
+
