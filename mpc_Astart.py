@@ -20,10 +20,10 @@ from a_star import *
 x_min = 0
 y_min = 0
 
-sx = 0.0
-sy = 0.0
-gx = -8.0
-gy = -5
+sx = 7.5
+sy = 7.5
+gx = 2.5
+gy = -7.5
 
 
 
@@ -54,7 +54,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             castor_wheels=["rotacastor_right_joint", "rotacastor_left_joint"],
             wheel_radius=0.08,
             wheel_distance=0.494,
-            spawn_offset = np.array([0, 0, 0.15]),
+            spawn_offset = np.array([sx, sy, 0.15]),
             spawn_rotation=0,
             facing_direction='-y',),]
     
@@ -107,7 +107,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     x_max, y_max, _ = world_max
 
     
-    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution)
+    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution, robot_inflation=0.5)
 
     sx_g, sy_g = world_to_grid(sx, sy, x_min, y_min)    
 
@@ -119,7 +119,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     A_star = AStarPlanner(resolution, 0.3, inflated_grid, x_min, y_min)
     rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g, gy_g)
     rx_w, ry_w = zip(*[grid_to_world(x, y, x_min, y_min) for x, y in zip(rx_g, ry_g)])
-
+    
 
     def spline_smooth(rx, ry, smoothing=0.5):
         tck, _ = splprep([rx, ry], s=smoothing)
@@ -136,7 +136,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
 
     distance = get_distance(rx_w, ry_w)
     print('distance = ',distance)
-    # show_solution(grid, rx_w_smooth, ry_w_smooth)
+    show_solution(grid, rx_w_smooth, ry_w_smooth)
 
 
 
@@ -154,7 +154,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     # Create path aligned with robot's actual heading
     # path = create_aligned_path(x0[0], x0[1], x0[2], path_type, path_length)
     path = path_xy[::-1]
-    ref = PolylineReference(path, ds=0.10, v_ref=0.25)
+    ref = PolylineReference(path, ds=0.10, v_ref=2.5)
     path_ids = draw_polyline(ref.path, z=0.1, line_width=6.0, life_time=0) # Draw path
     
 
@@ -163,7 +163,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     Ts_mpc = 0.10
     N = 10 #Horizon
     steps_per_mpc = int(round(Ts_mpc / env.dt))
-    Q_matrix = np.diag([25.0, 25.0, 25.0])  # Position and heading tracking
+    Q_matrix = np.diag([40.0, 40.0, 10.0])  # Position and heading tracking
     R_matrix = np.diag([0.1, 1.0])          # Control effort (v, w)
     P_matrix = np.diag([60.0, 60.0, 15.0])  # Terminal cost
     
@@ -174,7 +174,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         R= R_matrix,  
         P= P_matrix,  
         vmin= 0.0,
-        vmax= 1, 
+        vmax= 5, 
         wmax= 4.0 )
 
     u_last = np.array([0.0, 0.0])

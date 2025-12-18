@@ -87,7 +87,7 @@ wall_obstacles_dicts = [
     {
         'type': 'box', 
          'geometry': {
-             'position': [6.5, 4.0, 0.4], 'width': wall_thickness, 'height': 0.8, 'length': 7.0
+             'position': [7.5, 4.0, 0.4], 'width': wall_thickness, 'height': 5, 'length': 5.0
         },
         'high': {
             'position' : [6.5, 4.0, 0.4],
@@ -105,7 +105,7 @@ wall_obstacles_dicts = [
     {
         'type': 'box', 
          'geometry': {
-             'position': [2.0, 8.0, 0.4], 'width': 4.0, 'height': 0.8, 'length': wall_thickness
+             'position': [2.0, 8.0, 0.4], 'width': 4.0, 'height': 5, 'length': wall_thickness
         },
         'high': {
             'position' : [2.0, 8.0, 0.4],
