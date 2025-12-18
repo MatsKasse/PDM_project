@@ -3,23 +3,25 @@ import pybullet as p
 
 
 def wrap_angle(a):
-    """Wrap angle to [-pi, pi] range."""
+    """ Makes sure the angle is always beteen [-pi, pi]"""
     return (a + np.pi) % (2 * np.pi) - np.pi
 
 
 class PolylineReference:
     """
     Manages a polyline path and provides reference trajectories for MPC.
+    Resamples the path to evenly dinstance points.
+    Creates reference trajectories of these points for MPC horizon.
     """
     
     def __init__(self, waypoints_xy: np.ndarray, ds=0.10, v_ref=0.25):
         """
         Args:
-            waypoints_xy: Array of shape (N, 2) with path waypoints
+            waypoints_xy: Array of shape (N, 2) with coordinates in x and y.
             ds: Distance between resampled points (meters)
             v_ref: Reference velocity (m/s)
         """
-        assert waypoints_xy.shape[1] == 2
+        assert waypoints_xy.shape[1] == 2 ##validation if waypoints are correct form
         self.ds = float(ds)
         self.v_ref = float(v_ref)
         self.path = self._resample_polyline(waypoints_xy, self.ds)
@@ -27,17 +29,17 @@ class PolylineReference:
     @staticmethod
     def _resample_polyline(wp, ds):
         """Resample waypoints at fixed distance intervals."""
-        seg = wp[1:] - wp[:-1]
+        seg = wp[1:] - wp[:-1]      #create vectors between waypoints
         seglen = np.linalg.norm(seg, axis=1)
-        s = np.concatenate([[0.0], np.cumsum(seglen)])
-        total = s[-1]
+        s = np.concatenate([[0.0], np.cumsum(seglen)]) # accumulated length of path
+        total = s[-1]   #total path length
         
-        if total < 1e-9:
+        if total < 1e-9:            # if path length is 0, return a copy of the waypoint and don't sample
             return wp.copy()
         
-        s_new = np.arange(0.0, total + ds, ds)
+        s_new = np.arange(0.0, total + ds, ds)      # the path defined in desired steps ds
         out = []
-        j = 0
+        j = 0   #step zero (current)
         
         for si in s_new:
             while j < len(seglen) and s[j+1] < si:
@@ -45,51 +47,43 @@ class PolylineReference:
             if j >= len(seglen):
                 out.append(wp[-1])
                 continue
-            t = (si - s[j]) / max(seglen[j], 1e-9)
-            out.append(wp[j] + t * (wp[j+1] - wp[j]))
+            t = (si - s[j]) / max(seglen[j], 1e-9) 
+            out.append(wp[j] + t * (wp[j+1] - wp[j]))   # this is the list of waypoints for horizon
         
         return np.array(out, dtype=float)
 
     def closest_index(self, x, y):
-        """Find index of closest point on path to (x, y)."""
+        """Find the point on the path that is closest to the robot."""
         d = self.path - np.array([x, y])
         return int(np.argmin(np.sum(d*d, axis=1)))
 
     def horizon(self, x, y, theta, N):
         """
         Generate reference trajectory for MPC horizon.
-        
-        Args:
             x, y: Current position
             theta: Current heading angle
             N: Horizon length
-        
         Returns:
-            xr: Array of shape (N+1, 3) with [px, py, theta] at each step
-            ur: Array of shape (N, 2) with [v, w] at each step
+            xr: Robot state (N+1, 3) with [px, py, theta] at each step
+            ur: Robot input (N, 2) with [v, w] at each step
         """
-        # Find closest point and get N+1 points ahead
-        idx0 = self.closest_index(x, y)
-        idxs = np.clip(idx0 + np.arange(N+1), 0, len(self.path)-1)
+        idx0 = self.closest_index(x, y) # Find closest point and get N+1 points ahead
+        idxs = np.clip(idx0 + np.arange(N+1), 0, len(self.path)-1)  #make indices idx to idx0+N
 
-        pts = self.path[idxs]
+        pts = self.path[idxs]   #select the N+1 reference points from the path
         
-        # Calculate heading angles from path direction
+        # Calculate vectors for every point in direction
         d = np.zeros_like(pts)
         d[:-1] = pts[1:] - pts[:-1]
-        d[-1] = pts[-1] - pts[-2]
+        d[-1] = pts[-1] - pts[-2]   #last vector is from last point to the previous point just to give it a direction.
         
-        thetas = np.arctan2(d[:,1], d[:,0])
+        thetas = np.arctan2(d[:,1], d[:,0])                 #Change vectors in to heading angles.
+        thetas[0] = theta                                   #Use current heading for first reference point
+        thetas = np.array([wrap_angle(t) for t in thetas])  # Wrap all angles to [-pi, pi]
         
-        # CRITICAL FIX: Use current heading for first reference point
-        # This prevents the robot from making an initial turn
-        thetas[0] = theta
-        
-        # Wrap all angles to [-pi, pi]
-        thetas = np.array([wrap_angle(t) for t in thetas])
 
-        xr = np.column_stack([pts[:,0], pts[:,1], thetas])
-        ur = np.column_stack([np.full(N, self.v_ref), np.zeros(N)])
+        xr = np.column_stack([pts[:,0], pts[:,1], thetas])              # state Vector of X, Y and theta
+        ur = np.column_stack([np.full(N, self.v_ref), np.zeros(N)])     # imput vector v and w
         
         return xr, ur
 
@@ -129,18 +123,6 @@ def create_aligned_path(x0, y0, theta0, path_type="straight", length=3.0):
 
 
 def draw_polyline(points_xy, z=0.02, line_width=2.0, life_time=0):
-    """
-    Draw a polyline in PyBullet for visualization.
-    
-    Args:
-        points_xy: Array of shape (M, 2)
-        z: Height above ground
-        line_width: Width of debug line
-        life_time: 0 = permanent
-    
-    Returns:
-        List of debug line IDs
-    """
     ids = []
     for i in range(len(points_xy) - 1):
         a = [float(points_xy[i][0]), float(points_xy[i][1]), z]
