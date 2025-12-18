@@ -18,7 +18,7 @@ def generate_gridmap(xmin, xmax, ymin, ymax, resolution=1, ray_height=5.0, batch
     for i in range(w):
         for j in range(h):
             x = xmin + i * resolution
-            y = ymax - j * resolution
+            y = ymin + j * resolution
             ray_starts.append([x, y, ray_height])
             ray_ends.append([x, y, -1])    # ray goes straight down
             coords.append((i, j))
@@ -27,7 +27,7 @@ def generate_gridmap(xmin, xmax, ymin, ymax, resolution=1, ray_height=5.0, batch
 
     for k, result in enumerate(results):
         object_id = result[0]
-        hit = object_id > 0 #object_id '0' is the groundplane, if larger it is an object. Returns -1 if no hit.
+        hit = object_id > 1 #object_id '0' is the groundplane, if larger it is an object. Returns -1 if no hit.
         i, j = coords[k]
         grid[i, j] = 1 if hit else 0
 
