@@ -35,7 +35,6 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     # for box in box_obstacles:
     #     env.add_obstacle(box)
 
-    # Reset environment
     
     
     robot_id = 1
@@ -49,7 +48,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
 
     # Create path aligned with robot's actual heading
     path = create_aligned_path(x0[0], x0[1], x0[2], path_type, path_length)
-    ref = PolylineReference(path, ds=0.10, v_ref=0.25)
+    ref = PolylineReference(path, ds=0.10, v_ref=1)
     path_ids = draw_polyline(ref.path, z=0.1, line_width=6.0, life_time=0) # Draw path
     
 
@@ -69,8 +68,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         R= R_matrix,  
         P= P_matrix,  
         vmin= 0.0,
-        vmax= 0.6, 
-        wmax= 1.0 )
+        vmax= 7, 
+        wmax= 4.0 )
 
     u_last = np.array([0.0, 0.0])
     
@@ -150,6 +149,6 @@ if __name__ == "__main__":
         history = run_albert(
             n_steps=3000, 
             render=True,
-            path_type="L",  # Options: "straight", "L", "S"
-            path_length=3.0
+            path_type="S",  # Options: "straight", "L", "S"
+            path_length=5.0
         )
