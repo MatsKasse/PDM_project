@@ -1,13 +1,13 @@
 import warnings
 import gymnasium as gym
 import numpy as np
-import Gridmap as gm
+import pdm_RO47005.pdm_project.src.PDM_project.A_start.Gridmap as gm
 import pybullet as p
 import random
 from urdfenvs.robots.generic_urdf.generic_diff_drive_robot import GenericDiffDriveRobot
 from urdfenvs.urdf_common.urdf_env import UrdfEnv
 from my_obstacles import *
-from a_star import *
+from pdm_RO47005.pdm_project.src.PDM_project.A_start.a_star import *
 
 x_min = 0
 y_min = 0

@@ -1,7 +1,7 @@
 import warnings
 import numpy as np
 import pybullet as p
-import Gridmap as gm
+import A_star.Gridmap as gm
 import gymnasium as gym
 
 from scipy.interpolate import splprep, splev
@@ -15,7 +15,7 @@ from mpc.reference_generator import PolylineReference, draw_polyline, clear_debu
 from mpc.albert_control import extract_base_state, build_action, set_robot_body_id, angle_difference
 from mpc.mpc_osqp import LinearMPCOSQP
 
-from a_star import *
+from A_star.a_star import *
 
 x_min = 0
 y_min = 0
@@ -107,7 +107,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     x_max, y_max, _ = world_max
 
     
-    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution, robot_inflation=0.5)
+    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution, robot_inflation=0.45)
 
     sx_g, sy_g = world_to_grid(sx, sy, x_min, y_min)    
 
