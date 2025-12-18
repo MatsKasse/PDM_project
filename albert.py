@@ -98,21 +98,22 @@ def run_albert(n_steps=1000, render=False, goal=True, obstacles=True):
     sx_g, sy_g = world_to_grid(sx, sy)
     
     
-    gx, gy = np.zeros(visits), np.zeros(visits)
-    gx_g, gy_g = np.zeros(visits), np.zeros(visits)
+    # gx, gy = np.zeros(visits), np.zeros(visits)
+    # gx_g, gy_g = np.zeros(visits), np.zeros(visits)
+    gx_g, gy_g = world_to_grid(gx, gy)
 
-    pot_x, pot_y = np.where(inflated_grid == 0)
-    pos = np.column_stack((pot_x, pot_y))
-    indices = np.random.choice(len(pos), size=visits, replace=False)
+    # pot_x, pot_y = np.where(inflated_grid == 0)
+    # pos = np.column_stack((pot_x, pot_y))
+    # indices = np.random.choice(len(pos), size=visits, replace=False)
     
-    for i, idx in enumerate(indices):
-        gx_g[i], gy_g[i] = pos[idx]
-        gx[i], gy[i] = grid_to_world(gx_g[i], gy_g[i])
+    # for i, idx in enumerate(indices):
+    #     gx_g[i], gy_g[i] = pos[idx]
+    #     gx[i], gy[i] = grid_to_world(gx_g[i], gy_g[i])
     
 
 
     A_star = AStarPlanner(resolution, 0.3, inflated_grid, x_min, y_min)
-    rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g[0], gy_g[0])
+    rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g, gy_g)
     rx_w, ry_w = zip(*[grid_to_world(x, y) for x, y in zip(rx_g, ry_g)])
 
     distance = get_distance(rx_w, ry_w)
