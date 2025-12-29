@@ -21,6 +21,8 @@ visits = 3
 
 resolution = 0.09
 
+Multiple_Points = False
+
 def world_to_grid(x, y):
     x_g = int((x - x_min) / resolution)
     y_g = int((y - y_min) / resolution)
@@ -94,31 +96,49 @@ def run_albert(n_steps=1000, render=False, goal=True, obstacles=True):
     x_max, y_max, _ = world_max
 
     grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution)
+    A_star = AStarPlanner(resolution, 0.3, inflated_grid, x_min, y_min, x_max, y_max)
 
     sx_g, sy_g = world_to_grid(sx, sy)
     
-    
-    # gx, gy = np.zeros(visits), np.zeros(visits)
-    # gx_g, gy_g = np.zeros(visits), np.zeros(visits)
-    gx_g, gy_g = world_to_grid(gx, gy)
+    def get_path(gx, gy):
+        gx = gx
+        gy = gy
 
-    # pot_x, pot_y = np.where(inflated_grid == 0)
-    # pos = np.column_stack((pot_x, pot_y))
-    # indices = np.random.choice(len(pos), size=visits, replace=False)
-    
-    # for i, idx in enumerate(indices):
-    #     gx_g[i], gy_g[i] = pos[idx]
-    #     gx[i], gy[i] = grid_to_world(gx_g[i], gy_g[i])
-    
+        if Multiple_Points:
+            gx, gy = np.zeros(visits), np.zeros(visits)
+            gx_g, gy_g = np.zeros(visits), np.zeros(visits)
+            rx_w_list = []
+            ry_w_list = []
 
+            pot_x, pot_y = np.where(inflated_grid == 0)
+            pos = np.column_stack((pot_x, pot_y))
+            indices = np.random.choice(len(pos), size=visits, replace=False)
+            
+            for i, idx in enumerate(indices):
+                gx_g[i], gy_g[i] = pos[idx]
+                gx[i], gy[i] = grid_to_world(gx_g[i], gy_g[i])
+                if i == 0:
+                    rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g[i], gy_g[i])
+                else:
+                    rx_g, ry_g = A_star.planning(gx_g[i-1], gy_g[i-1], gx_g[i], gy_g[i])
+                
+                rx_w, ry_w = zip(*[grid_to_world(x, y) for x, y in zip(rx_g, ry_g)])
+                rx_w_list += rx_w
+                ry_w_list += ry_w
 
-    A_star = AStarPlanner(resolution, 0.3, inflated_grid, x_min, y_min)
-    rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g, gy_g)
-    rx_w, ry_w = zip(*[grid_to_world(x, y) for x, y in zip(rx_g, ry_g)])
+        else:
+            gx_g, gy_g = world_to_grid(gx, gy)
+            rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g, gy_g)
+            rx_w_list, ry_w_list = zip(*[grid_to_world(x, y) for x, y in zip(rx_g, ry_g)])
 
+        return rx_w_list, ry_w_list
+
+    rx_w, ry_w = get_path(gx, gy)
     distance = get_distance(rx_w, ry_w)
     print(distance)
     show_solution(grid, rx_w, ry_w)
+    print('rx:', rx_w)
+    print('ry:', ry_w) 
 
     def get_action(iter):
         if iter % 50 == 0:

@@ -18,7 +18,7 @@ show_animation = False
 
 class AStarPlanner:
 
-    def __init__(self, resolution, rr, occupancy_grid, x_min, y_min):
+    def __init__(self, resolution, rr, occupancy_grid, x_min, y_min, x_max, y_max):
         """
         Initialize grid map for a star planning
 
@@ -30,7 +30,7 @@ class AStarPlanner:
 
         self.resolution = resolution
         self.rr = rr
-        self.min_x, self.min_y = x_min, y_min
+        self.min_x, self.min_y = 0, 0
         self.max_x, self.max_y = 0, 0
         self.obstacle_map = None
         self.x_width, self.y_width = 0, 0

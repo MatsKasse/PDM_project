@@ -18,7 +18,7 @@ def generate_gridmap(xmin, xmax, ymin, ymax, resolution=1, ray_height=5.0, batch
     for i in range(w):
         for j in range(h):
             x = xmin + i * resolution
-            y = ymax - j * resolution
+            y = ymin + j * resolution
             ray_starts.append([x, y, ray_height])
             ray_ends.append([x, y, -1])    # ray goes straight down
             coords.append((i, j))
@@ -35,8 +35,6 @@ def generate_gridmap(xmin, xmax, ymin, ymax, resolution=1, ray_height=5.0, batch
         plt.figure(figsize=(10, 10))
         plt.imshow(grid.T, cmap="gray", vmin=0, vmax=1, interpolation="nearest")
         plt.show()
-
-    ox, oy = obs_coords(grid, resolution)
 
     grid = grid.T
     inflated_grid = inflate_grid(grid, resolution)
