@@ -12,10 +12,10 @@ from a_star import *
 x_min = 0
 y_min = 0
 
-sx = 16.0
-sy = 2.5
+sx = 15.0
+sy = 17.5
 gx = 1.0
-gy = 12.5
+gy = 14.0
 
 visits = 3
 
