@@ -57,9 +57,9 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     Ts_mpc = 0.10
     N = 10 #Horizon
     steps_per_mpc = int(round(Ts_mpc / env.dt))
-    Q_matrix = np.diag([40.0, 40.0, 10.0])  # Position and heading tracking
+    Q_matrix = np.diag([40.0, 40.0, 10.0, 10.0])  # Position and sin/cos tracking
     R_matrix = np.diag([0.1, 1.0])          # Control effort (v, w)
-    P_matrix = np.diag([60.0, 60.0, 15.0])  # Terminal cost
+    P_matrix = np.diag([60.0, 60.0, 15.0, 15.0])  # Terminal cost
     
     mpc = LinearMPCOSQP(
         Ts= Ts_mpc, 
@@ -74,13 +74,17 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     u_last = np.array([0.0, 0.0])
     
     history = []
+    def state_to_sincos(x_state):
+        return np.array([x_state[0], x_state[1], np.sin(x_state[2]), np.cos(x_state[2])], dtype=float)
+
     for t in range(n_steps): #basically for all t in simulation
         x = extract_base_state() #Extract pose
+        x_mpc = state_to_sincos(x)
 
         # Update MPC at specified rate
         if t % steps_per_mpc == 0:
-            x_ref, u_ref = ref.horizon(x[0], x[1], x[2], N)
-            u_last, res = mpc.solve(x, x_ref, u_ref)
+            x_ref, u_ref = ref.horizon(x[0], x[1], x[2], N, use_sincos=True, use_shortest_angle=True)
+            u_last, res = mpc.solve(x_mpc, x_ref, u_ref)
             
             # Print debug info every second
             # if t % (10 * steps_per_mpc) == 0:

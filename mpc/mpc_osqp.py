@@ -4,35 +4,38 @@ import osqp
 
 
 
-def linearize_unicycle(xbar, ubar, Ts):
+def linearize_unicycle_sincos(xbar, ubar, Ts):
     """
-    x = [px, py, theta], u = [v, w]
+    x = [px, py, sin(theta), cos(theta)], u = [v, w]
     f(x,u) = [px + Ts*v*cos(theta),
               py + Ts*v*sin(theta),
-              theta + Ts*w]
+              sin(theta) + Ts*w*cos(theta),
+              cos(theta) - Ts*w*sin(theta)]
     Linearize around (xbar, ubar): x+ = A x + B u + c
     """
-    px, py, th = xbar
+    px, py, s, c = xbar
     v, w = ubar
 
-    #calculate the Jacobians A and B
-    A = np.eye(3)
-    A[0,2] = -Ts * v * np.sin(th)
-    A[1,2] =  Ts * v * np.cos(th)
+    A = np.eye(4)
+    A[0,3] = Ts * v
+    A[1,2] = Ts * v
+    A[2,3] = Ts * w
+    A[3,2] = -Ts * w
 
-    B = np.zeros((3,2))
-    B[0,0] = Ts * np.cos(th)
-    B[1,0] = Ts * np.sin(th)
-    B[2,1] = Ts
+    B = np.zeros((4,2))
+    B[0,0] = Ts * c
+    B[1,0] = Ts * s
+    B[2,1] = Ts * c
+    B[3,1] = -Ts * s
 
-    #calculate c --> Corrects the linearalized equation.
     f = np.array([
-        px + Ts*v*np.cos(th),
-        py + Ts*v*np.sin(th),
-        th + Ts*w
+        px + Ts * v * c,
+        py + Ts * v * s,
+        s + Ts * w * c,
+        c - Ts * w * s,
     ])
-    c = f - A@xbar - B@ubar
-    return A, B, c
+    c_vec = f - A @ xbar - B @ ubar
+    return A, B, c_vec
 
 
 class LinearMPCOSQP:
@@ -61,7 +64,7 @@ class LinearMPCOSQP:
 
         self.Ts = float(Ts) # Sample time MPC
         self.N = int(N) # horizon length
-        self.nx = 3 #amount of states
+        self.nx = 4 #amount of states: [px, py, sin(theta), cos(theta)]
         self.nu = 2 #amount of inputs
 
         self.Q = Q # tracking penalty
@@ -146,7 +149,7 @@ class LinearMPCOSQP:
         # --- linearization trajectory (simple: around reference) ---
         A_list, B_list, c_list = [], [], []
         for k in range(N):
-            A, B, c = linearize_unicycle(x_ref[k], u_ref[k], self.Ts)
+            A, B, c = linearize_unicycle_sincos(x_ref[k], u_ref[k], self.Ts)
             A_list.append(A); B_list.append(B); c_list.append(c)
 
         # --- decision variable length ---

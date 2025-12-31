@@ -57,14 +57,17 @@ class PolylineReference:
         d = self.path - np.array([x, y])
         return int(np.argmin(np.sum(d*d, axis=1)))
 
-    def horizon(self, x, y, theta, N):
+    def horizon(self, x, y, theta, N, use_sincos=False, use_shortest_angle=True):
         """
         Generate reference trajectory for MPC horizon.
             x, y: Current position
             theta: Current heading angle
             N: Horizon length
+            use_sincos: Return [px, py, sin(theta), cos(theta)] if True
+            use_shortest_angle: Align reference headings with current theta using atan2
         Returns:
             xr: Robot state (N+1, 3) with [px, py, theta] at each step
+                or (N+1, 4) with [px, py, sin(theta), cos(theta)] if use_sincos
             ur: Robot input (N, 2) with [v, w] at each step
         """
         idx0 = self.closest_index(x, y) # Find closest point and get N+1 points ahead
@@ -78,11 +81,26 @@ class PolylineReference:
         d[-1] = pts[-1] - pts[-2]   #last vector is from last point to the previous point just to give it a direction.
         
         thetas = np.arctan2(d[:,1], d[:,0])                 #Change vectors in to heading angles.
-        thetas[0] = theta                                   #Use current heading for first reference point
-        thetas = np.array([wrap_angle(t) for t in thetas])  # Wrap all angles to [-pi, pi]
-        
+        # make heading continuous across ±pi
+        thetas = np.unwrap(thetas)
 
-        xr = np.column_stack([pts[:,0], pts[:,1], thetas])              # state Vector of X, Y and theta
+        # align the first reference heading with current robot heading
+        thetas = thetas - thetas[0] + theta
+
+        if use_shortest_angle:
+            # align each reference heading using atan2 shortest-angle difference
+            delta = np.arctan2(np.sin(thetas - theta), np.cos(thetas - theta))
+            thetas = theta + delta
+        else:
+            # optional: wrap back to [-pi, pi] to keep outputs bounded
+            thetas = np.array([wrap_angle(t) for t in thetas])
+
+        if use_sincos:
+            s = np.sin(thetas)
+            c = np.cos(thetas)
+            xr = np.column_stack([pts[:,0], pts[:,1], s, c])
+        else:
+            xr = np.column_stack([pts[:,0], pts[:,1], thetas])  # state Vector of X, Y and theta
         ur = np.column_stack([np.full(N, self.v_ref), np.zeros(N)])     # imput vector v and w
         
         return xr, ur

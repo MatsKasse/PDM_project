@@ -22,8 +22,8 @@ y_min = 0
 
 sx = 7.5
 sy = 7.5
-gx = 2.5
-gy = -7.5
+gx = -8.5
+gy = 5
 
 
 
@@ -55,19 +55,13 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             wheel_radius=0.08,
             wheel_distance=0.494,
             spawn_offset = np.array([sx, sy, 0.15]),
-            spawn_rotation=0,
-            facing_direction='-y',),]
+            spawn_rotation= -0.5*np.pi,
+            facing_direction='-x',),]
     
-    env: UrdfEnv = UrdfEnv(dt=0.01, robots=robots, render=render)
+    env: UrdfEnv = UrdfEnv(dt=0.01, robots=robots, render=render, observation_checking=False)
     ob, info = env.reset(pos=np.array([0.0, 0, 0.0, 0.0, 0.0, 0.0, -1.5, 0.0, 1.8, 0.5]))
 
-    # Add obstacles
-    # for wall in wall_obstacles:
-    #     env.add_obstacle(wall)
-    # for cylinder in cylinder_obstacles:
-    #     env.add_obstacle(cylinder)
-    # for box in box_obstacles:
-    #     env.add_obstacle(box)
+    
 
 #Part of Bram ========================================================================
     def get_distance(path_x, path_y):
@@ -107,7 +101,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     x_max, y_max, _ = world_max
 
     
-    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution, robot_inflation=0.45)
+    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution, robot_inflation=0.5)
 
     sx_g, sy_g = world_to_grid(sx, sy, x_min, y_min)    
 
@@ -154,18 +148,25 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     # Create path aligned with robot's actual heading
     # path = create_aligned_path(x0[0], x0[1], x0[2], path_type, path_length)
     path = path_xy[::-1]
-    ref = PolylineReference(path, ds=0.10, v_ref=2.5)
+    ref = PolylineReference(path, ds=0.1, v_ref=3.0)   #ds is the resampling interval. Smaller means dense waypoints, more noice
+                                                        # Larger ds means fewer reference updates, smoother. But cutting corners.
+                                                        #
     path_ids = draw_polyline(ref.path, z=0.1, line_width=6.0, life_time=0) # Draw path
+    
+    dx = path[1,0] - path[0,0]
+    dy = path[1,1] - path[0,1]
+    theta_tangent = np.arctan2(dy, dx)
     
 
 
     # MPC setup
-    Ts_mpc = 0.10
-    N = 10 #Horizon
+    Ts_mpc = 0.08 #sample period between control decisions made by the MPC. Increase for slower reaction time, lower computation, faster robot.
+                    #Decrease when sharp turns, obstacles, more chances per second to correct errors. But increase horizon
+    N = 20    #Horizon, amount of steps it looks forward. (basically N * Ts_mpc = seconds looking forward.)
     steps_per_mpc = int(round(Ts_mpc / env.dt))
-    Q_matrix = np.diag([40.0, 40.0, 10.0])  # Position and heading tracking
-    R_matrix = np.diag([0.1, 1.0])          # Control effort (v, w)
-    P_matrix = np.diag([60.0, 60.0, 15.0])  # Terminal cost
+    Q_matrix = np.diag([30.0, 30.0, 10.0, 10.0])  # Position and sin/cos tracking
+    R_matrix = np.diag([0.5, 5.0])          # Control effort (v, w)
+    P_matrix = np.diag([60.0, 60.0, 15.0, 15.0])  # Terminal cost
     
     mpc = LinearMPCOSQP(
         Ts= Ts_mpc, 
@@ -173,23 +174,36 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         Q= Q_matrix,  
         R= R_matrix,  
         P= P_matrix,  
-        vmin= 0.0,
-        vmax= 5, 
-        wmax= 4.0 )
+        vmin= -1.0,
+        vmax= 3.5, 
+        wmax= 0.8)
 
     u_last = np.array([0.0, 0.0])
     
     history = []
+    def state_to_sincos(x_state):
+        return np.array([x_state[0], x_state[1], np.sin(x_state[2]), np.cos(x_state[2])], dtype=float)
+
     for t in range(n_steps): #basically for all t in simulation
         x = extract_base_state() #Extract pose
+        x_mpc = state_to_sincos(x)
 
         # Update MPC at specified rate
         if t % steps_per_mpc == 0:
-            x_ref, u_ref = ref.horizon(x[0], x[1], x[2], N)
-            u_last, res = mpc.solve(x, x_ref, u_ref)
+            x_ref, u_ref = ref.horizon(x[0], x[1], x[2], N, use_sincos=True, use_shortest_angle=True)
+            u_last, res = mpc.solve(x_mpc, x_ref, u_ref)
             
             # Print debug info every second
-            # if t % (10 * steps_per_mpc) == 0:
+            if t % ( steps_per_mpc) == 0:
+                theta_ref = np.arctan2(x_ref[0,2], x_ref[0,3])
+                theta_err = np.arctan2(np.sin(theta_ref - x[2]), np.cos(theta_ref - x[2]))
+                print("u_last:", u_last, "theta:", x[2], "theta_ref:", theta_ref, "theta_err:", theta_err)
+                print("x[0:2]:", x[0:2], "x_ref[0,0:2]:", x_ref[0,0:2], "x_ref[1,0:2]:", x_ref[1,0:2])
+                print("osqp:", res.info.status, "iter:", res.info.iter)
+                # theta_now = x0[2]
+                # print("theta_now(deg):", np.degrees(theta_now),
+                # "theta_tangent(deg):", np.degrees(theta_tangent),
+                # "delta(deg):", np.degrees((theta_tangent - theta_now + np.pi)%(2*np.pi)-np.pi))       
             #     dx = x_ref[0, 0] - x[0]
             #     dy = x_ref[0, 1] - x[1]
             #     pos_error = np.sqrt(dx**2 + dy**2)
@@ -210,6 +224,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         
         if terminated or truncated:
             print(f"\n Terminated or Truncated at step {t}, see if collided or reached goal")
+            print(info)
             break
 
     # Final results

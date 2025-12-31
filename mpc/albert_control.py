@@ -51,7 +51,8 @@ def extract_base_state(_ob=None):
     # CRITICAL FIX: Robot's forward direction is -y in local frame
     # This is a -90° rotation from the world frame orientation
     yaw = yaw_world - np.pi/2
-    
+
+  
     # Wrap to [-pi, pi]
     yaw = (yaw + np.pi) % (2*np.pi) - np.pi
     
