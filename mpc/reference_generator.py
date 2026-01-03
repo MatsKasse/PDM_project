@@ -25,6 +25,7 @@ class PolylineReference:
         self.ds = float(ds)
         self.v_ref = float(v_ref)
         self.path = self._resample_polyline(waypoints_xy, self.ds)
+        
 
     @staticmethod
     def _resample_polyline(wp, ds):
@@ -57,7 +58,7 @@ class PolylineReference:
         d = self.path - np.array([x, y])
         return int(np.argmin(np.sum(d*d, axis=1)))
 
-    def horizon(self, x, y, theta, N, use_sincos=False, use_shortest_angle=True):
+    def horizon(self, x, y, theta, N, use_sincos=False, use_shortest_angle=True, threshold=0.05):
         """
         Generate reference trajectory for MPC horizon.
             x, y: Current position
@@ -75,6 +76,15 @@ class PolylineReference:
 
         pts = self.path[idxs]   #select the N+1 reference points from the path
         
+        #calculate the distance from the robot to the endpoint
+        distance = np.linalg.norm(self.path[-1] - np.array([x, y]))
+        slow_distance = 1.5
+        stop_distance = threshold
+        v_ref = self.v_ref * min(1.0, distance / slow_distance)
+        if distance < stop_distance:
+            v_ref = 0.2
+        
+
         # Calculate vectors for every point in direction
         d = np.zeros_like(pts)
         d[:-1] = pts[1:] - pts[:-1]
@@ -101,7 +111,8 @@ class PolylineReference:
             xr = np.column_stack([pts[:,0], pts[:,1], s, c])
         else:
             xr = np.column_stack([pts[:,0], pts[:,1], thetas])  # state Vector of X, Y and theta
-        ur = np.column_stack([np.full(N, self.v_ref), np.zeros(N)])     # imput vector v and w
+
+        ur = np.column_stack([np.full(N, v_ref), np.zeros(N)])     # imput vector v and w
         
         return xr, ur
 
