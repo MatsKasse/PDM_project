@@ -22,8 +22,8 @@ y_min = 0
 
 sx = 7.5
 sy = 7.5
-gx = -8.5
-gy = 5
+gx = -6
+gy = 3.5
 
 
 
@@ -58,7 +58,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             spawn_rotation= -0.5*np.pi,
             facing_direction='-x',),]
     
-    env: UrdfEnv = UrdfEnv(dt=0.01, robots=robots, render=render, observation_checking=False)
+    env: UrdfEnv = UrdfEnv(dt=0.05, robots=robots, render=render, observation_checking=False)
     ob, info = env.reset(pos=np.array([0.0, 0, 0.0, 0.0, 0.0, 0.0, -1.5, 0.0, 1.8, 0.5]))
 
     
@@ -122,7 +122,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         return x_s, y_s
     
     
-    rx_w_smooth, ry_w_smooth = spline_smooth(rx_w, ry_w, 0.5)
+    rx_w_smooth, ry_w_smooth = spline_smooth(rx_w, ry_w, 0.2)
 
     path_xy = np.column_stack((rx_w_smooth, ry_w_smooth)) 
 
@@ -152,6 +152,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
                                                         # Larger ds means fewer reference updates, smoother. But cutting corners.
                                                         #
     path_ids = draw_polyline(ref.path, z=0.1, line_width=6.0, life_time=0) # Draw path
+    goal_pos = (gx,gy)
+    goal_threshold = 0.05  # meters; stop when within this distance of goal
     
     dx = path[1,0] - path[0,0]
     dy = path[1,1] - path[0,1]
@@ -174,7 +176,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         Q= Q_matrix,  
         R= R_matrix,  
         P= P_matrix,  
-        vmin= -1.0,
+        vmin= 0.0,
         vmax= 3.5, 
         wmax= 0.8)
 
@@ -188,9 +190,18 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         x = extract_base_state() #Extract pose
         x_mpc = state_to_sincos(x)
 
+        dist_to_goal = np.linalg.norm([x[0] - goal_pos[0], x[1] - goal_pos[1]])
+        if dist_to_goal <= goal_threshold:
+            u_last[:] = 0.0
+            action = build_action(env.n(), v=0.0, w=0.0)
+            ob, reward, terminated, truncated, info = env.step(action)
+            history.append((x.copy(), u_last.copy(), ob))
+            print(f"\nReached goal within {goal_threshold} m (dist={dist_to_goal:.3f} m). Stopping.")
+            break
+
         # Update MPC at specified rate
         if t % steps_per_mpc == 0:
-            x_ref, u_ref = ref.horizon(x[0], x[1], x[2], N, use_sincos=True, use_shortest_angle=True)
+            x_ref, u_ref = ref.horizon(x[0], x[1], x[2], N, use_sincos=True, use_shortest_angle=True, threshold=goal_threshold)
             u_last, res = mpc.solve(x_mpc, x_ref, u_ref)
             
             # Print debug info every second
@@ -229,7 +240,6 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
 
     # Final results
     x_final = extract_base_state()
-    goal_pos = path[-1]
     dist_to_goal = np.linalg.norm([x_final[0] - goal_pos[0], x_final[1] - goal_pos[1]])
     
     clear_debug_items(path_ids)
