@@ -13,7 +13,7 @@ from urdfenvs.urdf_common.urdf_env import UrdfEnv
 
 from mpc.reference_generator import PolylineReference, draw_polyline, clear_debug_items, wrap_angle, create_aligned_path
 from mpc.albert_control import extract_base_state, build_action, set_robot_body_id, angle_difference
-from mpc.mpc_osqp import LinearMPCOSQP
+from mpc.mpc_osqp import LinearMPCOSQP, predict_dynamic_obstacles
 
 from A_star.a_star import *
 
@@ -22,8 +22,8 @@ y_min = 0
 
 sx = 7.5
 sy = 7.5
-gx = -6
-gy = 3.5
+gx = -8.5
+gy = -5
 
 
 
@@ -45,6 +45,7 @@ def grid_to_world(x_g, y_g, x_min, y_min):
 
 
 
+
 def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0):
     robots = [
         GenericDiffDriveRobot(
@@ -58,7 +59,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             spawn_rotation= -0.5*np.pi,
             facing_direction='-x',),]
     
-    env: UrdfEnv = UrdfEnv(dt=0.05, robots=robots, render=render, observation_checking=False)
+    env: UrdfEnv = UrdfEnv(dt=0.08, robots=robots, render=render, observation_checking=False)
     ob, info = env.reset(pos=np.array([0.0, 0, 0.0, 0.0, 0.0, 0.0, -1.5, 0.0, 1.8, 0.5]))
 
     
@@ -93,6 +94,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         env.add_obstacle(wall)
     for cylinder in cylinder_obstacles:
         env.add_obstacle(cylinder)
+    for dyn_obst in dynamic_sphere_obstacles:
+        env.add_obstacle(dyn_obst)
     # for box in box_obstacles:
     #     env.add_obstacle(box)
     
@@ -101,7 +104,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     x_max, y_max, _ = world_max
 
     
-    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution, robot_inflation=0.5)
+    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution, robot_inflation=0.4)
 
     sx_g, sy_g = world_to_grid(sx, sy, x_min, y_min)    
 
@@ -148,12 +151,12 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     # Create path aligned with robot's actual heading
     # path = create_aligned_path(x0[0], x0[1], x0[2], path_type, path_length)
     path = path_xy[::-1]
-    ref = PolylineReference(path, ds=0.1, v_ref=3.0)   #ds is the resampling interval. Smaller means dense waypoints, more noice
+    ref = PolylineReference(path, ds=0.1, v_ref=1.5)   #ds is the resampling interval. Smaller means dense waypoints, more noice
                                                         # Larger ds means fewer reference updates, smoother. But cutting corners.
                                                         #
     path_ids = draw_polyline(ref.path, z=0.1, line_width=6.0, life_time=0) # Draw path
     goal_pos = (gx,gy)
-    goal_threshold = 0.05  # meters; stop when within this distance of goal
+    goal_threshold = 0.08  # meters; stop when within this distance of goal
     
     dx = path[1,0] - path[0,0]
     dy = path[1,1] - path[0,1]
@@ -164,10 +167,10 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     # MPC setup
     Ts_mpc = 0.08 #sample period between control decisions made by the MPC. Increase for slower reaction time, lower computation, faster robot.
                     #Decrease when sharp turns, obstacles, more chances per second to correct errors. But increase horizon
-    N = 20    #Horizon, amount of steps it looks forward. (basically N * Ts_mpc = seconds looking forward.)
+    N = 25    #Horizon, amount of steps it looks forward. (basically N * Ts_mpc = seconds looking forward.)
     steps_per_mpc = int(round(Ts_mpc / env.dt))
     Q_matrix = np.diag([30.0, 30.0, 10.0, 10.0])  # Position and sin/cos tracking
-    R_matrix = np.diag([0.5, 5.0])          # Control effort (v, w)
+    R_matrix = np.diag([0.5, 2])          # Control effort (v, w)
     P_matrix = np.diag([60.0, 60.0, 15.0, 15.0])  # Terminal cost
     
     mpc = LinearMPCOSQP(
@@ -177,8 +180,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         R= R_matrix,  
         P= P_matrix,  
         vmin= 0.0,
-        vmax= 3.5, 
-        wmax= 0.8)
+        vmax= 1.5, 
+        wmax= 1.5)
 
     u_last = np.array([0.0, 0.0])
     
@@ -202,15 +205,21 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         # Update MPC at specified rate
         if t % steps_per_mpc == 0:
             x_ref, u_ref = ref.horizon(x[0], x[1], x[2], N, use_sincos=True, use_shortest_angle=True, threshold=goal_threshold)
-            u_last, res = mpc.solve(x_mpc, x_ref, u_ref)
+            
+            t_attr = getattr(env, "t", None)
+            t_now = t_attr() if callable(t_attr) else t * env.dt
+            obs_pred = predict_dynamic_obstacles(dynamic_sphere_obstacles, t_now, N, Ts_mpc)  
+
+            u_last, res = mpc.solve(x_mpc, x_ref, u_ref, obs_pred=obs_pred)
             
             # Print debug info every second
             if t % ( steps_per_mpc) == 0:
                 theta_ref = np.arctan2(x_ref[0,2], x_ref[0,3])
                 theta_err = np.arctan2(np.sin(theta_ref - x[2]), np.cos(theta_ref - x[2]))
-                print("u_last:", u_last, "theta:", x[2], "theta_ref:", theta_ref, "theta_err:", theta_err)
-                print("x[0:2]:", x[0:2], "x_ref[0,0:2]:", x_ref[0,0:2], "x_ref[1,0:2]:", x_ref[1,0:2])
-                print("osqp:", res.info.status, "iter:", res.info.iter)
+                # print("u_last:", u_last, "theta:", x[2], "theta_ref:", theta_ref, "theta_err:", theta_err)
+                # print("x[0:2]:", x[0:2], "x_ref[0,0:2]:", x_ref[0,0:2], "x_ref[1,0:2]:", x_ref[1,0:2])
+                # print("osqp:", res.info.status, "iter:", res.info.iter)
+                
                 # theta_now = x0[2]
                 # print("theta_now(deg):", np.degrees(theta_now),
                 # "theta_tangent(deg):", np.degrees(theta_tangent),
