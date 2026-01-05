@@ -133,7 +133,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
 
     distance = get_distance(rx_w, ry_w)
     print('distance = ',distance)
-    show_solution(grid, rx_w_smooth, ry_w_smooth)
+    # show_solution(grid, rx_w_smooth, ry_w_smooth)
 
 
 
@@ -151,7 +151,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     # Create path aligned with robot's actual heading
     # path = create_aligned_path(x0[0], x0[1], x0[2], path_type, path_length)
     path = path_xy[::-1]
-    ref = PolylineReference(path, ds=0.1, v_ref=1.0)   #ds is the resampling interval. Smaller means dense waypoints, more noice
+    ref = PolylineReference(path, ds=0.1, v_ref=1.5)   #ds is the resampling interval. Smaller means dense waypoints, more noice
                                                         # Larger ds means fewer reference updates, smoother. But cutting corners.
                                                         #
     path_ids = draw_polyline(ref.path, z=0.1, line_width=6.0, life_time=0) # Draw path
@@ -167,10 +167,10 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     # MPC setup
     Ts_mpc = 0.08 #sample period between control decisions made by the MPC. Increase for slower reaction time, lower computation, faster robot.
                     #Decrease when sharp turns, obstacles, more chances per second to correct errors. But increase horizon
-    N = 30    #Horizon, amount of steps it looks forward. (basically N * Ts_mpc = seconds looking forward.)
+    N = 35    #Horizon, amount of steps it looks forward. (basically N * Ts_mpc = seconds looking forward.)
     steps_per_mpc = int(round(Ts_mpc / env.dt))
-    Q_matrix = np.diag([10, 10.0, 1.0, 1.0])  # Position and sin/cos tracking
-    R_matrix = np.diag([0.5, 0.5])          # Control effort (v, w)
+    Q_matrix = np.diag([25.0, 25.0, 5.0, 5.0])  # Position and sin/cos tracking
+    R_matrix = np.diag([0.5, 1.5])          # Control effort (v, w)
     P_matrix = np.diag([60.0, 60.0, 15.0, 15.0])  # Terminal cost
     
     mpc = LinearMPCOSQP(
@@ -179,8 +179,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         Q= Q_matrix,  
         R= R_matrix,  
         P= P_matrix,  
-        vmin= 0.0,
-        vmax= 1.0, 
+        vmin= -0.8,
+        vmax= 1.5, 
         wmax= 1.5)
 
     u_last = np.array([0.0, 0.0])
@@ -188,6 +188,17 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     history = []
     def state_to_sincos(x_state):
         return np.array([x_state[0], x_state[1], np.sin(x_state[2]), np.cos(x_state[2])], dtype=float)
+
+    def min_obs_clearance(pos_xy, obs_pred):
+        if not obs_pred:
+            return None
+        min_clear = None
+        for step in obs_pred:
+            for ox, oy, r_safe in step:
+                clear = np.hypot(pos_xy[0] - ox, pos_xy[1] - oy) - r_safe
+                if min_clear is None or clear < min_clear:
+                    min_clear = clear
+        return min_clear
 
     for t in range(n_steps): #basically for all t in simulation
         x = extract_base_state() #Extract pose
@@ -212,6 +223,26 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
 
             u_last, res = mpc.solve(x_mpc, x_ref, u_ref, obs_pred=obs_pred)
             
+            status = getattr(res.info, "status", "")
+            status_val = getattr(res.info, "status_val", None)
+            iters = getattr(res.info, "iter", None)
+            pri_res = getattr(res.info, "pri_res", None)
+            dua_res = getattr(res.info, "dua_res", None)
+            min_clear = min_obs_clearance(x[:2], obs_pred)
+            if status_val not in (1, 2) or (t % (steps_per_mpc * 10) == 0):
+                print(
+                    "[osqp] t={:.2f} status={} iter={} pri_res={} dua_res={} min_clear={} u=({:.3f},{:.3f})".format(
+                        t_now,
+                        status,
+                        iters,
+                        None if pri_res is None else round(pri_res, 6),
+                        None if dua_res is None else round(dua_res, 6),
+                        None if min_clear is None else round(min_clear, 3),
+                        u_last[0],
+                        u_last[1],
+                    )
+                )
+
             # Print debug info every second
             if t % ( steps_per_mpc) == 0:
                 theta_ref = np.arctan2(x_ref[0,2], x_ref[0,3])

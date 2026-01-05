@@ -77,7 +77,7 @@ class LinearMPCOSQP:
         self.wmax = float(wmax)
 
         self.use_collision_slack = True
-        self.slack_weight = 150.0
+        self.slack_weight = 500.0
 
         self.prob = osqp.OSQP() #OSQP solver object
         self._is_setup = False #parameter
@@ -185,7 +185,7 @@ class LinearMPCOSQP:
                 Aineq[row, yk_idx] = ny_hat
 
                 if slack_offset is not None:
-                    Aineq[row, slack_offset + row] = -1.0
+                    Aineq[row, slack_offset + row] = 1.0
 
                 l[row] = nx_hat * ox + ny_hat * oy + r_safe
                 row += 1
@@ -308,7 +308,7 @@ class LinearMPCOSQP:
         if (not self._is_setup) or (getattr(self, "_A_nnz", None) != A.nnz):
             self.prob = osqp.OSQP()
             self.prob.setup(P=H, q=q, A=A, l=l, u=u,
-                            warm_start=True, verbose=False, polish=True)
+                            warm_start=True, verbose=False, polish=True) #set to false for smoother simulation
             self._is_setup = True
             self._A_nnz = A.nnz
         else:
@@ -324,6 +324,7 @@ class LinearMPCOSQP:
         res = self.prob.solve()
         if res.info.status_val not in (1, 2):  # 1=solved, 2=solved inaccurate (information)
             # fallback: stop veilig als status = 3 of 4
+            # return np.array([0.0, 0.0]), res
             return np.array([0.0, 0.0]), res
 
         z = res.x # optimal solution vector z
@@ -338,7 +339,7 @@ class LinearMPCOSQP:
         return u0, res
 
 
-def predict_dynamic_obstacles(obstacles, t_now, N, Ts_mpc, robot_radius=0.3, margin=0.1):
+def predict_dynamic_obstacles(obstacles, t_now, N, Ts_mpc, robot_radius=0.3, margin=0.2):
     """
     Returns list length (N+1). Each entry is list of (ox, oy, r_safe).
     """
