@@ -13,6 +13,8 @@ import math
 
 import matplotlib.pyplot as plt
 
+from scipy.ndimage import distance_transform_edt
+
 show_animation = False
 
 
@@ -36,6 +38,7 @@ class AStarPlanner:
         self.x_width, self.y_width = 0, 0
         self.motion = self.get_motion_model()
         self.calc_obstacle_map(occupancy_grid)
+        self.dist_to_obstacle = distance_transform_edt(occupancy_grid == 0) #Gives distance from every free cell to closest obstacle
 
     class Node:
         def __init__(self, x, y, cost, parent_index):
@@ -48,7 +51,7 @@ class AStarPlanner:
             return str(self.x) + "," + str(self.y) + "," + str(
                 self.cost) + "," + str(self.parent_index)
 
-    def planning(self, sx_g, sy_g, gx_g, gy_g):
+    def planning(self, sx_g, sy_g, gx_g, gy_g, weight_clearance=1.0):
         """
         A star path search
 
@@ -68,6 +71,7 @@ class AStarPlanner:
         goal_node = self.Node(self.calc_xy_index(gx, self.min_x),
                               self.calc_xy_index(gy, self.min_y), 0.0, -1)
         '''
+        
 
         start_node = self.Node(int(sx_g), int(sy_g), 0.0, -1)
         goal_node  = self.Node(int(gx_g), int(gy_g), 0.0, -1)
@@ -82,9 +86,7 @@ class AStarPlanner:
 
             c_id = min(
                 open_set,
-                key=lambda o: open_set[o].cost + self.calc_heuristic(goal_node,
-                                                                     open_set[
-                                                                         o]))
+                key=lambda o: open_set[o].cost + self.calc_heuristic(goal_node, open_set[o]))
             current = open_set[c_id]
 
             # show graph
@@ -114,7 +116,8 @@ class AStarPlanner:
             for i, _ in enumerate(self.motion):
                 node = self.Node(current.x + self.motion[i][0],
                                  current.y + self.motion[i][1],
-                                 current.cost + self.motion[i][2], c_id)
+                                 current.cost + self.motion[i][2] , c_id)
+                node.cost += self.calc_clearance(node, weight_clearance=weight_clearance) #add clearance cost
                 n_id = self.calc_grid_index(node)
 
                 # If the node is not safe, do nothing
@@ -152,6 +155,12 @@ class AStarPlanner:
         w = 1.0  # weight of heuristic
         d = w * math.hypot(n1.x - n2.x, n1.y - n2.y)
         return d
+    
+    def calc_clearance(self, node, weight_clearance=1.0):
+        distance = self.dist_to_obstacle[node.y-1, node.x-1] #-1 for zero indexing
+        cost = weight_clearance * (1.0 / (distance + 1e-6))  # avoid division by zero
+        return cost
+
 
     def calc_grid_position(self, index, min_position):
         """
@@ -191,7 +200,7 @@ class AStarPlanner:
             return False
 
         # collision check
-        if self.obstacle_map[node.x][node.y]:
+        if self.obstacle_map[node.y][node.x]:
             return False
 
         return True

@@ -5,7 +5,7 @@ import math
 
 display = False
 
-def generate_gridmap(xmin, xmax, ymin, ymax, resolution=1, robot_inflation=0.4, ray_height=5.0, batch_size=100):
+def generate_gridmap(xmin, xmax, ymin, ymax, resolution=1, robot_radius=0.4, ray_height=5.0, batch_size=100):
     w = int((xmax - xmin) / resolution)
     h = int((ymax - ymin) / resolution)
 
@@ -39,7 +39,7 @@ def generate_gridmap(xmin, xmax, ymin, ymax, resolution=1, robot_inflation=0.4, 
     ox, oy = obs_coords(grid, resolution)
 
     grid = grid.T
-    inflated_grid = inflate_grid(grid, resolution, robot_inflation)
+    inflated_grid = inflate_grid(grid, resolution, robot_radius)
 
     return grid, inflated_grid
 
@@ -88,12 +88,12 @@ def obs_coords(grid, resolution):
 
     return ox, oy
 
-def inflate_grid(grid, resolution, robot_inflation):
+def inflate_grid(grid, resolution, robot_radius):
         inflated = grid.copy()
         ys, xs = np.where(grid == 1)
-        robot_radius = int(math.ceil(robot_inflation / resolution))
+        robot_radius = int(math.ceil(robot_radius / resolution))
 
-        for y, x in zip(ys, xs):
+        for x, y in zip(ys, xs): #changed x and y
             y_min = max(0, y - robot_radius)
             y_max = min(grid.shape[0], y + robot_radius + 1)
             x_min = max(0, x - robot_radius)
