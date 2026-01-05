@@ -77,7 +77,7 @@ class LinearMPCOSQP:
         self.wmax = float(wmax)
 
         self.use_collision_slack = True
-        self.slack_weight = 500.0
+        self.slack_weight = 150.0
 
         self.prob = osqp.OSQP() #OSQP solver object
         self._is_setup = False #parameter
@@ -338,7 +338,7 @@ class LinearMPCOSQP:
         return u0, res
 
 
-def predict_dynamic_obstacles(obstacles, t_now, N, Ts_mpc, robot_radius=0.3, margin=0.2):
+def predict_dynamic_obstacles(obstacles, t_now, N, Ts_mpc, robot_radius=0.3, margin=0.1):
     """
     Returns list length (N+1). Each entry is list of (ox, oy, r_safe).
     """

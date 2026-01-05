@@ -375,8 +375,13 @@ dynamic_sphere_obstacles_dicts = [
     },
     {
         "type": "sphere",
-        "geometry": {"trajectory": ["-2.0", "-1.0 + 0.2 * t", "0.2"], "radius": 0.35},
+        "geometry": {"trajectory": ["-2.0", "-2.0 + 0.05 * t", "0.2"], "radius": 0.35},
         "rgba": [1.0, 0.6, 0.1, 1.0],
+    },
+    {
+        "type": "sphere",
+        "geometry": {"trajectory": ["0.0 + 0.2 * t", "2.0", "0.2"], "radius": 0.35},
+        "rgba": [1.0, 0.2, 0.2, 1.0],
     },
 ]
 
