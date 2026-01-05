@@ -151,7 +151,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     # Create path aligned with robot's actual heading
     # path = create_aligned_path(x0[0], x0[1], x0[2], path_type, path_length)
     path = path_xy[::-1]
-    ref = PolylineReference(path, ds=0.1, v_ref=1.5)   #ds is the resampling interval. Smaller means dense waypoints, more noice
+    ref = PolylineReference(path, ds=0.1, v_ref=1.0)   #ds is the resampling interval. Smaller means dense waypoints, more noice
                                                         # Larger ds means fewer reference updates, smoother. But cutting corners.
                                                         #
     path_ids = draw_polyline(ref.path, z=0.1, line_width=6.0, life_time=0) # Draw path
@@ -167,10 +167,10 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     # MPC setup
     Ts_mpc = 0.08 #sample period between control decisions made by the MPC. Increase for slower reaction time, lower computation, faster robot.
                     #Decrease when sharp turns, obstacles, more chances per second to correct errors. But increase horizon
-    N = 25    #Horizon, amount of steps it looks forward. (basically N * Ts_mpc = seconds looking forward.)
+    N = 30    #Horizon, amount of steps it looks forward. (basically N * Ts_mpc = seconds looking forward.)
     steps_per_mpc = int(round(Ts_mpc / env.dt))
-    Q_matrix = np.diag([30.0, 30.0, 10.0, 10.0])  # Position and sin/cos tracking
-    R_matrix = np.diag([0.5, 2])          # Control effort (v, w)
+    Q_matrix = np.diag([10, 10.0, 1.0, 1.0])  # Position and sin/cos tracking
+    R_matrix = np.diag([0.5, 0.5])          # Control effort (v, w)
     P_matrix = np.diag([60.0, 60.0, 15.0, 15.0])  # Terminal cost
     
     mpc = LinearMPCOSQP(
@@ -180,7 +180,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         R= R_matrix,  
         P= P_matrix,  
         vmin= 0.0,
-        vmax= 1.5, 
+        vmax= 1.0, 
         wmax= 1.5)
 
     u_last = np.array([0.0, 0.0])
