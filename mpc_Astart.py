@@ -25,8 +25,8 @@ sx = 7.5
 sy = 7.5
 
 #goal world coordinates
-gx = 10 #6
-gy = -9 #3.5
+gx = 0 #6
+gy = 0 #3.5
 
 
 visits = 3 # amount of random points to visit
