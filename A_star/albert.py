@@ -1,27 +1,25 @@
 import warnings
 import gymnasium as gym
 import numpy as np
-import Gridmap as gm
+import pdm_RO47005.pdm_project.src.PDM_project.A_start.Gridmap as gm
 import pybullet as p
 import random
 from urdfenvs.robots.generic_urdf.generic_diff_drive_robot import GenericDiffDriveRobot
 from urdfenvs.urdf_common.urdf_env import UrdfEnv
 from my_obstacles import *
-from a_star import *
+from pdm_RO47005.pdm_project.src.PDM_project.A_start.a_star import *
 
 x_min = 0
 y_min = 0
 
-sx = 15.0
-sy = 17.5
+sx = 16.0
+sy = 2.5
 gx = 1.0
-gy = 14.0
+gy = 12.5
 
 visits = 3
 
 resolution = 0.09
-
-Multiple_Points = False
 
 def world_to_grid(x, y):
     x_g = int((x - x_min) / resolution)
@@ -96,49 +94,31 @@ def run_albert(n_steps=1000, render=False, goal=True, obstacles=True):
     x_max, y_max, _ = world_max
 
     grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution)
-    A_star = AStarPlanner(resolution, 0.3, inflated_grid, x_min, y_min, x_max, y_max)
 
     sx_g, sy_g = world_to_grid(sx, sy)
     
-    def get_path(gx, gy):
-        gx = gx
-        gy = gy
+    
+    # gx, gy = np.zeros(visits), np.zeros(visits)
+    # gx_g, gy_g = np.zeros(visits), np.zeros(visits)
+    gx_g, gy_g = world_to_grid(gx, gy)
 
-        if Multiple_Points:
-            gx, gy = np.zeros(visits), np.zeros(visits)
-            gx_g, gy_g = np.zeros(visits), np.zeros(visits)
-            rx_w_list = []
-            ry_w_list = []
+    # pot_x, pot_y = np.where(inflated_grid == 0)
+    # pos = np.column_stack((pot_x, pot_y))
+    # indices = np.random.choice(len(pos), size=visits, replace=False)
+    
+    # for i, idx in enumerate(indices):
+    #     gx_g[i], gy_g[i] = pos[idx]
+    #     gx[i], gy[i] = grid_to_world(gx_g[i], gy_g[i])
+    
 
-            pot_x, pot_y = np.where(inflated_grid == 0)
-            pos = np.column_stack((pot_x, pot_y))
-            indices = np.random.choice(len(pos), size=visits, replace=False)
-            
-            for i, idx in enumerate(indices):
-                gx_g[i], gy_g[i] = pos[idx]
-                gx[i], gy[i] = grid_to_world(gx_g[i], gy_g[i])
-                if i == 0:
-                    rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g[i], gy_g[i])
-                else:
-                    rx_g, ry_g = A_star.planning(gx_g[i-1], gy_g[i-1], gx_g[i], gy_g[i])
-                
-                rx_w, ry_w = zip(*[grid_to_world(x, y) for x, y in zip(rx_g, ry_g)])
-                rx_w_list += rx_w
-                ry_w_list += ry_w
 
-        else:
-            gx_g, gy_g = world_to_grid(gx, gy)
-            rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g, gy_g)
-            rx_w_list, ry_w_list = zip(*[grid_to_world(x, y) for x, y in zip(rx_g, ry_g)])
+    A_star = AStarPlanner(resolution, 0.3, inflated_grid, x_min, y_min)
+    rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g, gy_g)
+    rx_w, ry_w = zip(*[grid_to_world(x, y) for x, y in zip(rx_g, ry_g)])
 
-        return rx_w_list, ry_w_list
-
-    rx_w, ry_w = get_path(gx, gy)
     distance = get_distance(rx_w, ry_w)
     print(distance)
     show_solution(grid, rx_w, ry_w)
-    print('rx:', rx_w)
-    print('ry:', ry_w) 
 
     def get_action(iter):
         if iter % 50 == 0:
@@ -165,4 +145,3 @@ if __name__ == "__main__":
     with warnings.catch_warnings():
         warnings.filterwarnings(warning_flag)
         run_albert(render=True)
-
