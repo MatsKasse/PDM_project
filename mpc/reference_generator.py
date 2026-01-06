@@ -25,6 +25,8 @@ class PolylineReference:
         self.ds = float(ds)
         self.v_ref = float(v_ref)
         self.path = self._resample_polyline(waypoints_xy, self.ds)
+        self._last_idx = 0
+
         
 
     @staticmethod
@@ -56,7 +58,11 @@ class PolylineReference:
     def closest_index(self, x, y):
         """Find the point on the path that is closest to the robot."""
         d = self.path - np.array([x, y])
-        return int(np.argmin(np.sum(d*d, axis=1)))
+        idx = int(np.argmin(np.sum(d*d, axis=1)))
+        idx = max(idx, self._last_idx)   # never go backwards
+        self._last_idx = idx
+        return idx
+
 
     def horizon(self, x, y, theta, N, use_sincos=False, use_shortest_angle=True, threshold=0.05):
         """
@@ -76,13 +82,13 @@ class PolylineReference:
 
         pts = self.path[idxs]   #select the N+1 reference points from the path
         
-        #calculate the distance from the robot to the endpoint
+        # calculate the distance from the robot to the endpoint
         distance = np.linalg.norm(self.path[-1] - np.array([x, y]))
-        slow_distance = 1.5
+        slow_distance = 2
         stop_distance = threshold
         v_ref = self.v_ref * min(1.0, distance / slow_distance)
         if distance < stop_distance:
-            v_ref = 0.2
+            v_ref = 0.0
         
 
         # Calculate vectors for every point in direction
