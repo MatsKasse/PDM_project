@@ -143,8 +143,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     print('coordinate check', sx_g, sy_g, gx_g, gy_g)
 
     #Initialize A* planner and plan path
-    A_star = AStarPlanner(resolution, 0.3, inflated_grid, x_min, y_min)
-    rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g, gy_g, weight_clearance=0.0) #weight_clearance --> the clearance to objects
+    A_star = AStarPlanner(resolution, inflated_grid, x_min, y_min)
+    rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g, gy_g, weight_clearance=clearance_weight) #weight_clearance --> the clearance to objects
     rx_w, ry_w = zip(*[grid_to_world(x, y, x_min, y_min) for x, y in zip(rx_g, ry_g)])
     
     
