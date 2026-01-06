@@ -7,7 +7,7 @@ from mpscenes.obstacles.cylinder_obstacle import CylinderObstacle
 import os
 
 
-wall_length = 20
+wall_length = 21
 wall_thickness=0.1
 wall_obstacles_dicts = [
     {
@@ -87,7 +87,7 @@ wall_obstacles_dicts = [
     {
         'type': 'box', 
          'geometry': {
-             'position': [7.5, 4.0, 0.4], 'width': wall_thickness, 'height': 5, 'length': 5.0
+             'position': [8, 4.0, 0.4], 'width': wall_thickness, 'height': 5, 'length': 5.0
         },
         'high': {
             'position' : [6.5, 4.0, 0.4],
@@ -105,7 +105,7 @@ wall_obstacles_dicts = [
     {
         'type': 'box', 
          'geometry': {
-             'position': [2.0, 8.0, 0.4], 'width': 4.0, 'height': 5, 'length': wall_thickness
+             'position': [2.0, 8.5, 0.4], 'width': 4.0, 'height': 5, 'length': wall_thickness
         },
         'high': {
             'position' : [2.0, 8.0, 0.4],
