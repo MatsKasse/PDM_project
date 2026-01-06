@@ -20,18 +20,18 @@ show_animation = False
 
 class AStarPlanner:
 
-    def __init__(self, resolution, rr, occupancy_grid, x_min, y_min):
+    def __init__(self, resolution, occupancy_grid, x_min, y_min):
         """
         Initialize grid map for a star planning
 
-        ox: x position list of Obstacles [m]
-        oy: y position list of Obstacles [m]
+        
         resolution: grid resolution [m]
-        rr: robot radius[m]
+        occupancy_grid: 2D numpy array representing the occupancy grid (0: free, 1: obstacle)
+        x_min: minimum x coordinate of the grid [m]
+        y_min: minimum y coordinate of the grid [m]
         """
 
         self.resolution = resolution
-        self.rr = rr
         self.min_x, self.min_y = x_min, y_min
         self.max_x, self.max_y = 0, 0
         self.obstacle_map = None

@@ -25,13 +25,14 @@ sx = 7.5
 sy = 7.5
 
 #goal world coordinates
-gx = 0 #6
-gy = 0 #3.5
+gx = 6
+gy = -7.5
 
+#Parameters
+robot_radius = 0.3 # robot radius in meters
+clearance_weight = 0.5 # weight for clearance in A* cost function
+resolution = 0.09 # grid resolution in meters
 
-visits = 3 # amount of random points to visit
-
-resolution = 0.09
 
 #Convert world coordinates to grid coordinates
 def world_to_grid(x, y, x_min, y_min):
@@ -113,15 +114,15 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     if dynamic_obstacle is True:
         for dyn_obst in dynamic_sphere_obstacles:
             env.add_obstacle(dyn_obst)
-    # for box in box_obstacles:
-    #     env.add_obstacle(box)
+    for box in box_obstacles:
+        env.add_obstacle(box)
     
     world_min, world_max = gm.get_world_bounds()
     x_min, y_min, _ = world_min
     x_max, y_max, _ = world_max
 
     #Generate gridmap and inflated gridmap
-    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution, robot_radius=0.5)
+    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution, robot_radius=robot_radius)
 
     #Convert start and goal to grid coordinates
     sx_g, sy_g = world_to_grid(sx, sy, x_min, y_min)    
@@ -140,8 +141,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     print('coordinate check', sx_g, sy_g, gx_g, gy_g)
 
     #Initialize A* planner and plan path
-    A_star = AStarPlanner(resolution, 0.3, inflated_grid, x_min, y_min)
-    rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g, gy_g, weight_clearance=0.0)
+    A_star = AStarPlanner(resolution, inflated_grid, x_min, y_min)
+    rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g, gy_g, weight_clearance=clearance_weight)
     rx_w, ry_w = zip(*[grid_to_world(x, y, x_min, y_min) for x, y in zip(rx_g, ry_g)])
     
     
