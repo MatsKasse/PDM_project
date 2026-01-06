@@ -365,3 +365,32 @@ box_obstacles_dicts = [
 ]
 
 box_obstacles = [BoxObstacle(name=f"box_{i}", content_dict=obst_dict) for i, obst_dict in enumerate(box_obstacles_dicts)]
+
+
+dynamic_sphere_obstacles_dicts = [
+    {
+        "type": "sphere",
+        "geometry": {"trajectory": ["4.0 - 0.2 * t", "2.0", "0.2"], "radius": 0.35},
+        "rgba": [1.0, 0.2, 0.2, 1.0],
+    },
+    {
+        "type": "sphere",
+        "geometry": {"trajectory": ["-2.0", "-2.0 + 0.05 * t", "0.2"], "radius": 0.35},
+        "rgba": [1.0, 0.6, 0.1, 1.0],
+    },
+    {
+        "type": "sphere",
+        "geometry": {"trajectory": ["0.0 + 0.2 * t", "2.0", "0.2"], "radius": 0.35},
+        "rgba": [1.0, 0.2, 0.2, 1.0],
+    },
+    {
+        "type": "sphere",
+        "geometry": {"trajectory": ["0.0 + 0.1 * t", "3.0", "0.2"], "radius": 0.35},
+        "rgba": [1.0, 0.2, 0.2, 1.0],
+    },
+]
+
+dynamic_sphere_obstacles = [
+    DynamicSphereObstacle(name=f"dyn_sphere_{i}", content_dict=obst_dict)
+    for i, obst_dict in enumerate(dynamic_sphere_obstacles_dicts)
+]

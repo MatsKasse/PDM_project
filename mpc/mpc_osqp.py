@@ -11,7 +11,7 @@ def linearize_unicycle_sincos(xbar, ubar, Ts):
               py + Ts*v*sin(theta),
               sin(theta) + Ts*w*cos(theta),
               cos(theta) - Ts*w*sin(theta)]
-    Linearize around (xbar, ubar): x+ = A x + B u + c
+    Linearize around (xbar, ubar): x = A x + B u + c
     """
     px, py, s, c = xbar
     v, w = ubar
@@ -42,6 +42,7 @@ class LinearMPCOSQP:
     """
     QP-solvers only accept this form:
     Min 0.5 * z^T * H * z + q^T * z
+    constraints     l <= A@z <= u
     z is here the 'decision variable' that is a stacked formulation of the states and actions on the horizon:
       z = [x0..xN, u0..u_{N-1}]
     The quadratic terms are going to be in H.
@@ -74,6 +75,9 @@ class LinearMPCOSQP:
         self.vmin = float(vmin)
         self.vmax = float(vmax)
         self.wmax = float(wmax)
+
+        self.use_collision_slack = True
+        self.slack_weight = 500.0
 
         self.prob = osqp.OSQP() #OSQP solver object
         self._is_setup = False #parameter
@@ -137,12 +141,69 @@ class LinearMPCOSQP:
             u_in[k*nu + 1] =  self.wmax
         
         return Aineq, l_in, u_in
+    
 
-    def build_qp(self, x_init, x_ref, u_ref):
+    def _count_collision_constraints(self, obs_pred):
+        if obs_pred is None:
+            return 0
+        return sum(len(step) for step in obs_pred)
+
+    def _build_collision_constraints(self, nZ, xbar_xy, obs_pred, slack_offset=None, eps=1e-6):
+        """
+        Tangent half-space constraints:
+        n^T p >= n^T o + r_safe - s
+        """
+        N, nx = self.N, self.nx
+
+        nrows = self._count_collision_constraints(obs_pred)
+        if nrows == 0:
+            return None, None, None
+
+        Aineq = sp.lil_matrix((nrows, nZ))
+        l = np.zeros(nrows)
+        u = np.full(nrows, np.inf)
+
+        row = 0
+        for k in range(N + 1):
+            xk_idx = k * nx + 0
+            yk_idx = k * nx + 1
+
+            xbar = float(xbar_xy[k, 0])
+            ybar = float(xbar_xy[k, 1])
+
+            for (ox, oy, r_safe) in obs_pred[k]:
+                dx = xbar - ox
+                dy = ybar - oy
+                dist = (dx * dx + dy * dy) ** 0.5
+                if dist < eps:
+                    dx, dy, dist = 1.0, 0.0, 1.0
+
+                nx_hat = dx / dist
+                ny_hat = dy / dist
+
+                Aineq[row, xk_idx] = nx_hat
+                Aineq[row, yk_idx] = ny_hat
+
+                if slack_offset is not None:
+                    Aineq[row, slack_offset + row] = 1.0
+
+                l[row] = nx_hat * ox + ny_hat * oy + r_safe
+                row += 1
+
+        return Aineq.tocsc(), l, u
+
+
+
+    def build_qp(self, x_init, x_ref, u_ref, obs_pred=None, xbar_xy=None):
         """
         Convert MPC formulation into OSQP required QP formulation.
         x_ref: (N+1,3)
         u_ref: (N,2)
+        l_list, u_list are lists of lower and upper bounds for each constraint block.
+        Aeq, leq, ueq are equality constraint matrix and bounds for the dynamics
+        xbar is the state from the previous solution. xbar_xy are the x and y part of the xbar
+        Acol, l_col, u_col are collision constraints matrix and bounds
+        Acons is the final stacked constraint matrix
         """
         N, nx, nu = self.N, self.nx, self.nu
 
@@ -155,13 +216,20 @@ class LinearMPCOSQP:
         # --- decision variable length ---
         nX = (N+1)*nx
         nU = N*nu
-        nZ = nX + nU # Decision variable has all states and actions of the horizon in one vector.
+        nC = 0
+        if self.use_collision_slack and obs_pred is not None:
+            nC = self._count_collision_constraints(obs_pred)
+        nZ = nX + nU + nC # Decision variable has all states and actions of the horizon in one vector.
 
         # --- cost H, q ---
         Hx_blocks = [sp.kron(sp.eye(N), sp.csc_matrix(self.Q)), sp.csc_matrix(self.P)] 
         Hx = sp.block_diag(Hx_blocks, format='csc')  # State Cost
         Hu = sp.kron(sp.eye(N), sp.csc_matrix(self.R), format='csc')    # Control Cost
-        H = sp.block_diag([Hx, Hu], format='csc') #Cost matrix
+        if nC > 0:
+            Hs = sp.eye(nC, format='csc') * (2.0 * self.slack_weight)
+            H = sp.block_diag([Hx, Hu, Hs], format='csc') #Cost matrix
+        else:
+            H = sp.block_diag([Hx, Hu], format='csc') #Cost matrix
 
         # linear term: -2*Q*x_ref etc. (in 0.5 z^T H z + q^T z form)
         qx = np.zeros(nX)
@@ -171,7 +239,10 @@ class LinearMPCOSQP:
         qu = np.zeros(nU)
         for k in range(N):
             qu[k*nu:(k+1)*nu] = -self.R @ u_ref[k]
-        q = np.concatenate([qx, qu])
+        if nC > 0:
+            q = np.concatenate([qx, qu, np.zeros(nC)])
+        else:
+            q = np.concatenate([qx, qu])
 
         # --- Build constraints modularly ---
         constraint_list = []
@@ -189,29 +260,55 @@ class LinearMPCOSQP:
         constraint_list.append(Aineq)
         l_list.append(l_in)
         u_list.append(u_in)
-        
-        # 3) Add more constraints here as needed
-        # Example: if hasattr(self, 'use_state_constraints') and self.use_state_constraints:
-        #     Astate, l_state, u_state = self._build_state_constraints(nZ)
-        #     constraint_list.append(Astate)
-        #     l_list.append(l_state)
-        #     u_list.append(u_state)
-        
+      
+
+
+        # 3) Collision constraint(optional)
+        if obs_pred is not None:
+            if xbar_xy is None:
+                xbar_xy = x_ref[:, 0:2]
+
+            slack_offset = (nX + nU) if nC > 0 else None
+            Acol, l_col, u_col = self._build_collision_constraints(
+                nZ, xbar_xy, obs_pred, slack_offset=slack_offset
+            )
+            if Acol is not None:
+                constraint_list.append(Acol)
+                l_list.append(l_col)
+                u_list.append(u_col)
+
+            if nC > 0:
+                A_slack = sp.lil_matrix((nC, nZ))
+                for i in range(nC):
+                    A_slack[i, slack_offset + i] = 1.0
+                constraint_list.append(A_slack.tocsc())
+                l_list.append(np.zeros(nC))
+                u_list.append(np.full(nC, np.inf))
+
+
+
         # Stack all constraints
         Acons = sp.vstack(constraint_list, format='csc')
-        l = np.concatenate(l_list)
+        l = np.concatenate(l_list) 
         u = np.concatenate(u_list)
 
         return H, q, Acons, l, u, nZ
 
-    def solve(self, x_init, x_ref, u_ref):
-        H, q, A, l, u, nZ = self.build_qp(x_init, x_ref, u_ref)
+    def solve(self, x_init, x_ref, u_ref, obs_pred=None):
+        xbar_xy = None
+        if self.z_prev is not None:
+            nx = self.nx
+            nX = (self.N + 1) * nx
+            xbar = self.z_prev[:nX].reshape(self.N + 1, nx)
+            xbar_xy = xbar[:, 0:2]
+
+        H, q, A, l, u, nZ = self.build_qp(x_init, x_ref, u_ref, obs_pred=obs_pred, xbar_xy=xbar_xy)
 
         # 1) eerste keer of sparsity veranderd? -> volledige setup
         if (not self._is_setup) or (getattr(self, "_A_nnz", None) != A.nnz):
             self.prob = osqp.OSQP()
             self.prob.setup(P=H, q=q, A=A, l=l, u=u,
-                            warm_start=True, verbose=False, polish=True)
+                            warm_start=True, verbose=False, polish=True) #set to false for smoother simulation
             self._is_setup = True
             self._A_nnz = A.nnz
         else:
@@ -223,16 +320,55 @@ class LinearMPCOSQP:
         if self.z_prev is not None and len(self.z_prev) == nZ:
             self.prob.warm_start(x=self.z_prev)
 
+
         res = self.prob.solve()
         if res.info.status_val not in (1, 2):  # 1=solved, 2=solved inaccurate (information)
             # fallback: stop veilig als status = 3 of 4
+            # return np.array([0.0, 0.0]), res
             return np.array([0.0, 0.0]), res
 
         z = res.x # optimal solution vector z
         self.z_prev = z
+
+
 
         # extract u0
         nx = self.nx
         nX = (self.N+1)*nx
         u0 = z[nX:nX+self.nu] # extract first controll input [v,w]
         return u0, res
+
+
+def predict_dynamic_obstacles(obstacles, t_now, N, Ts_mpc, robot_radius=0.3, margin=0.2):
+    """
+    Returns list length (N+1). Each entry is list of (ox, oy, r_safe).
+    """
+    obs_pred = [[] for _ in range(N + 1)]
+
+    if obstacles is None:
+        return obs_pred
+
+    for k in range(N + 1):
+        t_k = t_now + k * Ts_mpc
+        for obst in obstacles:
+            pos = obst.position(t=t_k)
+            ox, oy = float(pos[0]), float(pos[1])
+
+            # TODO: choose a conservative radius for obstacle
+            # Example: if obstacle has size() or radius():
+            if hasattr(obst, "radius"):
+                r_obs = float(obst.radius())
+            elif hasattr(obst, "size"):
+                size = obst.size()
+                # conservative: half of max XY size
+                r_obs = 0.5 * max(float(size[0]), float(size[1]))
+            else:
+                r_obs = 0.5  # fallback
+
+            r_safe = r_obs + robot_radius + margin
+            obs_pred[k].append((ox, oy, r_safe))
+
+    return obs_pred
+
+
+
