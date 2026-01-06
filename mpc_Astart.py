@@ -94,8 +94,10 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         env.add_obstacle(wall)
     for cylinder in cylinder_obstacles:
         env.add_obstacle(cylinder)
-    for dyn_obst in dynamic_sphere_obstacles:
-        env.add_obstacle(dyn_obst)
+    dynamic_obstacle = False
+    if dynamic_obstacle is True:
+        for dyn_obst in dynamic_sphere_obstacles:
+            env.add_obstacle(dyn_obst)
     # for box in box_obstacles:
     #     env.add_obstacle(box)
     
@@ -219,7 +221,11 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             
             t_attr = getattr(env, "t", None)
             t_now = t_attr() if callable(t_attr) else t * env.dt
-            obs_pred = predict_dynamic_obstacles(dynamic_sphere_obstacles, t_now, N, Ts_mpc)  
+            if dynamic_obstacle is True:
+                obs_pred = predict_dynamic_obstacles(dynamic_sphere_obstacles, t_now, N, Ts_mpc)
+            else:
+                obs_pred = predict_dynamic_obstacles(None, t_now, N, Ts_mpc)
+            
 
             u_last, res = mpc.solve(x_mpc, x_ref, u_ref, obs_pred=obs_pred)
             
