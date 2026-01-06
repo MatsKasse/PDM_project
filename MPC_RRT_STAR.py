@@ -7,18 +7,16 @@ import matplotlib.patches as patches
 import math
 import random
 
-
 from scipy.interpolate import splprep, splev
 from urdfenvs.robots.generic_urdf.generic_diff_drive_robot import GenericDiffDriveRobot
 from my_obstacles import *
 from urdfenvs.urdf_common.urdf_env import UrdfEnv
 
-
 from mpc.reference_generator import PolylineReference, draw_polyline, clear_debug_items, wrap_angle, create_aligned_path
 from mpc.albert_control import extract_base_state, build_action, set_robot_body_id, angle_difference
 from mpc.mpc_osqp import LinearMPCOSQP
 
-#Part of Lars========================================================================
+#Part of Lars ========================================================================
 
 # Global coordinates
 sx, sy = 7.5, 7.5   # Start
@@ -55,9 +53,11 @@ class RRTNode:
         self.x = x
         self.y = y
         self.parent = None
+        self.cost = 0.0
 
-class RRT:
-    def __init__(self, start, goal, obstacles, rand_area, robot_radius=0.4, expand_dis=1.5, goal_sample_rate=10, max_iter=3000):
+class RRTStar:
+    def __init__(self, start, goal, obstacles, rand_area, robot_radius=0.4, 
+                 expand_dis=1.5, goal_sample_rate=10, max_iter=3000, connect_circle_dist=5.0):
         self.start = RRTNode(start[0], start[1])
         self.goal = RRTNode(goal[0], goal[1])
         self.obstacles = obstacles
@@ -66,30 +66,120 @@ class RRT:
         self.expand_dis = expand_dis
         self.goal_sample_rate = goal_sample_rate
         self.max_iter = max_iter
+        self.connect_circle_dist = connect_circle_dist
         self.node_list = []
 
     def planning(self):
         self.node_list = [self.start]
         for i in range(self.max_iter):
+            # 1. Sampling
             if random.randint(0, 100) <= self.goal_sample_rate:
                 rnd_node = RRTNode(self.goal.x, self.goal.y)
             else:
-                rnd_node = RRTNode(random.uniform(self.min_rand, self.max_rand), random.uniform(self.min_rand, self.max_rand))
+                rnd_node = RRTNode(random.uniform(self.min_rand, self.max_rand), 
+                                   random.uniform(self.min_rand, self.max_rand))
 
+            # 2. Nearest
             dlist = [(node.x - rnd_node.x)**2 + (node.y - rnd_node.y)**2 for node in self.node_list]
-            nearest_node = self.node_list[dlist.index(min(dlist))]
+            nearest_ind = dlist.index(min(dlist))
+            nearest_node = self.node_list[nearest_ind]
 
+            # 3. Steer
             theta = math.atan2(rnd_node.y - nearest_node.y, rnd_node.x - nearest_node.x)
-            new_node = RRTNode(nearest_node.x + self.expand_dis * math.cos(theta), nearest_node.y + self.expand_dis * math.sin(theta))
+            new_node = RRTNode(nearest_node.x + self.expand_dis * math.cos(theta), 
+                               nearest_node.y + self.expand_dis * math.sin(theta))
+            new_node.cost = nearest_node.cost + self.expand_dis
             new_node.parent = nearest_node
 
+            if is_point_in_obstacle(new_node.x, new_node.y, self.obstacles, self.robot_radius):
+                continue
+
             if is_line_collision_free(nearest_node.x, nearest_node.y, new_node.x, new_node.y, self.obstacles, self.robot_radius):
-                self.node_list.append(new_node)
-                if math.hypot(new_node.x - self.goal.x, new_node.y - self.goal.y) <= self.expand_dis:
-                    final_node = RRTNode(self.goal.x, self.goal.y)
-                    final_node.parent = new_node
-                    if is_line_collision_free(new_node.x, new_node.y, final_node.x, final_node.y, self.obstacles, self.robot_radius):
-                        return self.get_path_goal_to_start(final_node)
+                # --- RRT* Logic Starts Here ---
+                near_inds = self.find_near_nodes(new_node)
+                
+                # 4. Choose Best Parent
+                new_node = self.choose_parent(new_node, near_inds)
+                
+                if new_node.parent:
+                    self.node_list.append(new_node)
+                    # 5. Rewire
+                    self.rewire(new_node, near_inds)
+        
+        # End of iterations: Find best path to goal
+        last_index = self.search_best_goal_node()
+        if last_index is not None:
+            return self.get_path_goal_to_start(self.node_list[last_index])
+        return None
+
+    def choose_parent(self, new_node, near_inds):
+        if not near_inds:
+            return new_node
+        
+        costs = []
+        for i in near_inds:
+            near_node = self.node_list[i]
+            t_node = self.steer(near_node, new_node)
+            if t_node and is_line_collision_free(near_node.x, near_node.y, new_node.x, new_node.y, self.obstacles, self.robot_radius):
+                costs.append(t_node.cost)
+            else:
+                costs.append(float("inf"))
+        
+        min_cost = min(costs)
+        if min_cost == float("inf"):
+            return new_node
+            
+        min_ind = near_inds[costs.index(min_cost)]
+        new_node = self.steer(self.node_list[min_ind], new_node)
+        return new_node
+
+    def steer(self, from_node, to_node):
+        new_node = RRTNode(from_node.x, from_node.y)
+        d_x = to_node.x - from_node.x
+        d_y = to_node.y - from_node.y
+        dist = math.hypot(d_x, d_y)
+        
+        if dist > self.expand_dis:
+            dist = self.expand_dis
+            
+        new_node.x += dist * math.cos(math.atan2(d_y, d_x))
+        new_node.y += dist * math.sin(math.atan2(d_y, d_x))
+        new_node.cost = from_node.cost + dist
+        new_node.parent = from_node
+        return new_node
+
+    def find_near_nodes(self, new_node):
+        nnode = len(self.node_list) + 1
+        r = self.connect_circle_dist * math.sqrt((math.log(nnode) / nnode))
+        r = min(r, self.connect_circle_dist)
+        dist_list = [(node.x - new_node.x)**2 + (node.y - new_node.y)**2 for node in self.node_list]
+        return [i for i, d in enumerate(dist_list) if d <= r**2]
+
+    def rewire(self, new_node, near_inds):
+        for i in near_inds:
+            near_node = self.node_list[i]
+            edge_node = self.steer(new_node, near_node)
+            if not edge_node: continue
+            
+            # Check collision and cost improvement
+            no_collision = is_line_collision_free(new_node.x, new_node.y, near_node.x, near_node.y, self.obstacles, self.robot_radius)
+            improved_cost = edge_node.cost < near_node.cost
+
+            if no_collision and improved_cost:
+                near_node.parent = new_node
+                near_node.cost = edge_node.cost
+
+    def search_best_goal_node(self):
+        dist_to_goal_list = [math.hypot(n.x - self.goal.x, n.y - self.goal.y) for n in self.node_list]
+        goal_inds = [i for i, d in enumerate(dist_to_goal_list) if d <= self.expand_dis]
+
+        if not goal_inds:
+            return None
+
+        min_cost = min([self.node_list[i].cost for i in goal_inds])
+        for i in goal_inds:
+            if self.node_list[i].cost == min_cost:
+                return i
         return None
 
     def get_path_goal_to_start(self, end_node):
@@ -98,7 +188,10 @@ class RRT:
         while curr is not None:
             path.append([curr.x, curr.y])
             curr = curr.parent
-        return path # Returns Goal -> Start (matches A* raw output expectation for Mats' code)
+        # Add goal if not already there (optional, but good for precision)
+        if len(path) > 0 and (path[0][0] != self.goal.x or path[0][1] != self.goal.y):
+             path.insert(0, [self.goal.x, self.goal.y])
+        return path 
 
 def convert_env_obstacles(wall_obs, cyl_obs, box_obs):
     rrt_obs = []
@@ -140,15 +233,15 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     for box in box_obstacles: env.add_obstacle(box)
 
 #Part of Lars ========================================================================
-    print("\n Generating RRT Path with 0.4m Radius...")
+    print("\n Generating RRT* Path with 0.4m Radius...")
     rrt_obstacles = convert_env_obstacles(wall_obstacles, cylinder_obstacles, box_obstacles)
     
-    # Run RRT
-    rrt_planner = RRT(start=[sx, sy], goal=[gx, gy], obstacles=rrt_obstacles, rand_area=[-11, 11], robot_radius=0.4)
-    raw_path_list = rrt_planner.planning() # Returns Goal -> Start
+    # Run RRT*
+    rrt_star = RRTStar(start=[sx, sy], goal=[gx, gy], obstacles=rrt_obstacles, rand_area=[-11, 11], robot_radius=0.4)
+    raw_path_list = rrt_star.planning() # Returns Goal -> Start
 
     if raw_path_list is None:
-        print("RRT Failed. Exiting.")
+        print("RRT* Failed. Exiting.")
         env.close()
         return []
 
@@ -156,10 +249,6 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     rx = [p[0] for p in raw_path_list] # Goal -> Start X
     ry = [p[1] for p in raw_path_list] # Goal -> Start Y
     
-    # We must sort points for splprep if they are not unique or loop back, 
-    # but for path planning we usually want to keep order. 
-    # However, splprep param 'u' usually handles order.
-    # To be safe for simple path smoothing without u handling:
     try:
         # Simple linear interpolation if path is short
         if len(rx) < 4:
@@ -184,12 +273,18 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     for obs in rrt_obstacles:
         if obs['type'] == 'rect': plt.gca().add_patch(patches.Rectangle((obs['x'], obs['y']), obs['w'], obs['h'], color='gray'))
         elif obs['type'] == 'circle': plt.gca().add_patch(patches.Circle((obs['x'], obs['y']), obs['r'], color='gray'))
-    plt.plot(rx, ry, "g--", label="RRT Raw")
+    
+    # Draw Tree edges for RRT*
+    for node in rrt_star.node_list:
+        if node.parent:
+            plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-g", alpha=0.1, linewidth=0.5)
+
+    plt.plot(rx, ry, "b--", label="RRT* Raw")
     plt.plot(rx_smooth, ry_smooth, "r-", label="Smooth")
     plt.plot(sx, sy, "go", label="Start")
     plt.plot(gx, gy, "ro", label="Goal")
     plt.legend()
-    plt.title("RRT Plan")
+    plt.title("RRT* Plan")
     plt.show(block=False)
     plt.pause(1)
     plt.close()
@@ -269,21 +364,6 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
                 print("u_last:", u_last, "theta:", x[2], "theta_ref:", theta_ref, "theta_err:", theta_err)
                 print("x[0:2]:", x[0:2], "x_ref[0,0:2]:", x_ref[0,0:2], "x_ref[1,0:2]:", x_ref[1,0:2])
                 print("osqp:", res.info.status, "iter:", res.info.iter)
-                # theta_now = x0[2]
-                # print("theta_now(deg):", np.degrees(theta_now),
-                # "theta_tangent(deg):", np.degrees(theta_tangent),
-                # "delta(deg):", np.degrees((theta_tangent - theta_now + np.pi)%(2*np.pi)-np.pi))        
-            #      dx = x_ref[0, 0] - x[0]
-            #      dy = x_ref[0, 1] - x[1]
-            #      pos_error = np.sqrt(dx**2 + dy**2)
-            #      theta_error = angle_difference(x_ref[0, 2], x[2])
-                
-            #      print(f"t={t*env.dt:4.1f}s: "
-            #            f"pos=({x[0]:+5.2f}, {x[1]:+5.2f}), "
-            #            f"θ={np.degrees(x[2]):+4.0f}°, "
-            #            f"err={pos_error:.3f}m, "
-            #            f"θ_err={np.degrees(theta_error):4.1f}°, "
-            #            f"cmd=(v={u_last[0]:.2f}, w={u_last[1]:+.2f})")
 
         # Apply control
         action = build_action(env.n(), v=u_last[0], w=u_last[1])
@@ -303,32 +383,6 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     clear_debug_items(path_ids)
     env.close()
     return history
-
-    # print(f"\n{'='*60}")
-    # print(f"Simulation completed:")
-    # print(f"  Final position: ({x_final[0]:.3f}, {x_final[1]:.3f})")
-    # print(f"  Goal position:  ({goal_pos[0]:.3f}, {goal_pos[1]:.3f})")
-    # print(f"  Distance to goal: {dist_to_goal:.3f}m")
-    # print(f"  Steps: {len(history)}")
-    # print(f"{'='*60}\n")
-
-    # Verify alignment
-    # path_dir = np.arctan2(path[1,1] - path[0,1], path[1,0] - path[0,0])
-    # alignment_err = angle_difference(path_dir, x0[2])
-    
-    # print(f"\nPath configuration:")
-    # print(f"  Type: {path_type}, Length: {path_length}m")
-    # print(f"  Start: ({path[0,0]:.3f}, {path[0,1]:.3f})")
-    # print(f"  End:    ({path[-1,0]:.3f}, {path[-1,1]:.3f})")
-    # print(f"  Path direction: {np.degrees(path_dir):.1f}°")
-    # print(f"  Robot heading:  {np.degrees(x0[2]):.1f}°")
-    # print(f"  Alignment: {np.degrees(alignment_err):.1f}° {'✓' if alignment_err < 0.1 else '✗'}")
-
-    # print(f"\nMPC configuration:")
-    # print(f"  Sample time: {Ts_mpc}s")
-    # print(f"  Horizon: {N} steps")
-    # print(f"  Updates every {steps_per_mpc} env steps")
-    # print(f"{'='*60}\n")
 
 if __name__ == "__main__":
     show_warnings = False
