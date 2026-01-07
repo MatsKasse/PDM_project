@@ -55,12 +55,42 @@ def static_obstacles_to_circles(walls, boxes, cylinders,
 
     return circles
 
-def filter_circles_near_robot(static_circles, x, y, r_query=4.0):
+def filter_circles_near_robot(static_circles, x, y, r_query=3.0):
     out = []
     rq2 = r_query*r_query
     for ox, oy, r in static_circles:
         if (ox-x)**2 + (oy-y)**2 <= rq2:
             out.append((ox, oy, r))
+    return out
+
+def filter_circles_near_robot_capped(static_circles, x, y, r_query=3.0, M_MAX=80):
+    """
+    1) filter binnen r_query
+    2) sorteer op afstand tot robot
+    3) neem maximaal M_MAX
+    4) pad met dummy circles tot exact M_MAX (constante lengte!)
+    """
+    rq2 = r_query * r_query
+    cand = []
+
+    for ox, oy, r in static_circles:
+        dx = ox - x
+        dy = oy - y
+        d2 = dx*dx + dy*dy
+        if d2 <= rq2:
+            cand.append((d2, ox, oy, r))
+
+    # dichtstbij eerst
+    cand.sort(key=lambda t: t[0])
+
+    # cap
+    out = [(ox, oy, r) for (_, ox, oy, r) in cand[:M_MAX]]
+
+    # pad met “no-effect” obstacles ver weg
+    # (ze komen nooit in de buurt → constraint wordt niet bindend)
+    while len(out) < M_MAX:
+        out.append((1e6, 1e6, 0.1))
+
     return out
 
 

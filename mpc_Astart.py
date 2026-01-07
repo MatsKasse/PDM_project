@@ -14,7 +14,7 @@ from urdfenvs.urdf_common.urdf_env import UrdfEnv
 from mpc.reference_generator import PolylineReference, draw_polyline, clear_debug_items, wrap_angle, create_aligned_path
 from mpc.albert_control import extract_base_state, build_action, set_robot_body_id, angle_difference
 from mpc.mpc_osqp import LinearMPCOSQP, predict_dynamic_obstacles
-from mpc.static_obstacle_to_circles import static_obstacles_to_circles, filter_circles_near_robot
+from mpc.static_obstacle_to_circles import static_obstacles_to_circles, filter_circles_near_robot, filter_circles_near_robot_capped
 
 from A_star.a_star import *
 
@@ -272,7 +272,9 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             t_attr = getattr(env, "t", None)
             t_now = t_attr() if callable(t_attr) else t * env.dt
 
-            static_local = filter_circles_near_robot(static_circles_all, x[0], x[1], r_query=5.0)
+            # static_local = filter_circles_near_robot(static_circles_all, x[0], x[1], r_query=3.0)
+            static_local = filter_circles_near_robot_capped(static_circles_all, x[0], x[1], r_query=3.0, M_MAX=60)
+
             K = 20
 
             static_pred = [static_local if k <= K else [] for k in range(N+1)]
@@ -280,12 +282,15 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             if dynamic_obstacle is True:
                 dyn_obs_pred = predict_dynamic_obstacles(dynamic_sphere_obstacles, t_now, N, Ts_mpc)
             else:
-                dyn_obs_pred = predict_dynamic_obstacles(None, t_now, N, Ts_mpc)
+                dyn_obs_pred = [[] for _ in range(N+1)]
+
             
             obs_pred = [dyn_obs_pred[k] + static_pred[k] for k in range(N+1)]
 
             u_last, res = mpc.solve(x_mpc, x_ref, u_ref, obs_pred=obs_pred)
     
+        if t % (steps_per_mpc * 50) == 0:
+            print(f"static_local len = {len(static_local)} (should be M_MAX)")
 
         # Apply control
         action = build_action(env.n(), v=u_last[0], w=u_last[1])
