@@ -186,11 +186,6 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     print('distance = ',distance)
     show_solution(grid, inflated_grid, rx_w_smooth, ry_w_smooth, rx_w, ry_w)
 
-    # static_circles = static_obstacles_to_circles(wall_obstacles, box_obstacles,
-    #                                                 cylinder_obstacles, robot_radius=robot_radius,
-    #                                                 margin=0.2, sample_radius=0.3)
- 
-
 
  # Part of Mats ===================================================================== 
     robot_id = 1
