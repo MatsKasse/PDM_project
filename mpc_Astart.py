@@ -14,17 +14,19 @@ from urdfenvs.urdf_common.urdf_env import UrdfEnv
 from mpc.reference_generator import PolylineReference, draw_polyline, clear_debug_items, wrap_angle, create_aligned_path
 from mpc.albert_control import extract_base_state, build_action, set_robot_body_id, angle_difference
 from mpc.mpc_osqp import LinearMPCOSQP, predict_dynamic_obstacles
+from mpc.static_obstacle_to_circles import static_obstacles_to_circles
+
 
 from A_star.a_star import *
 
 
 #start world coordinates
-sx = 7.5
-sy = 7.5
+sx = 5
+sy = 5
 
 #goal world coordinates
-gx = 6
-gy = -7.5
+gx = 0
+gy = 0
 
 #Parameters
 robot_radius = 0.3 # robot radius in meters
@@ -106,8 +108,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     #Set up obstacles in the environment
     for wall in wall_obstacles:
         env.add_obstacle(wall)
-    for cylinder in cylinder_obstacles:
-        env.add_obstacle(cylinder)
+    # for cylinder in cylinder_obstacles:
+    #     env.add_obstacle(cylinder)
 
     dynamic_obstacle = True
 
@@ -157,7 +159,10 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     print('distance = ',distance)
     show_solution(grid, inflated_grid, rx_w_smooth, ry_w_smooth, rx_w, ry_w)
 
-
+    static_circles = static_obstacles_to_circles(wall_obstacles, box_obstacles,
+                                                    cylinder_obstacles, robot_radius=robot_radius,
+                                                    margin=0.2, sample_radius=0.3)
+ 
 
 
  # Part of Mats ===================================================================== 
@@ -244,11 +249,15 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
 
             t_attr = getattr(env, "t", None)
             t_now = t_attr() if callable(t_attr) else t * env.dt
+
+            static_pred = [static_circles for _ in range(N+1)]
+
             if dynamic_obstacle is True:
-                obs_pred = predict_dynamic_obstacles(dynamic_sphere_obstacles, t_now, N, Ts_mpc)
+                dyn_obs_pred = predict_dynamic_obstacles(dynamic_sphere_obstacles, t_now, N, Ts_mpc)
             else:
-                obs_pred = predict_dynamic_obstacles(None, t_now, N, Ts_mpc)
+                dyn_obs_pred = predict_dynamic_obstacles(None, t_now, N, Ts_mpc)
             
+            obs_pred = [dyn_obs_pred[k] + static_pred[k] for k in range(N+1)]
 
             u_last, res = mpc.solve(x_mpc, x_ref, u_ref, obs_pred=obs_pred)
     
