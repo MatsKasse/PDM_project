@@ -38,8 +38,9 @@ def static_obstacles_to_circles(walls, boxes, cylinders,
         d = _get_content_dict(b)
         g = d["geometry"]
         cx, cy, _ = g["position"]
-        w = float(g["width"])
-        l = float(g["length"])
+        l = float(g["width"])
+        w = float(g["length"])
+    
 
         poly = _box_to_polygon(float(cx), float(cy), w, l)
         inflated = poly.buffer(robot_radius + margin)
@@ -53,3 +54,14 @@ def static_obstacles_to_circles(walls, boxes, cylinders,
             s += spacing
 
     return circles
+
+def filter_circles_near_robot(static_circles, x, y, r_query=4.0):
+    out = []
+    rq2 = r_query*r_query
+    for ox, oy, r in static_circles:
+        if (ox-x)**2 + (oy-y)**2 <= rq2:
+            out.append((ox, oy, r))
+    return out
+
+
+
