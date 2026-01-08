@@ -89,3 +89,15 @@ def inflate_grid(grid, resolution, robot_radius):
             inflated[x_min:x_max, y_min:y_max] = 1
 
         return inflated
+
+#Convert world coordinates to grid coordinates
+def world_to_grid(x, y, x_min, y_min, resolution):
+    x_g = int((x - x_min) / resolution)
+    y_g = int((y - y_min) / resolution)
+    return x_g, y_g
+
+#Convert grid coordinates to world coordinates
+def grid_to_world(x_g, y_g, x_min, y_min, resolution):
+    x = (x_g) * resolution + x_min
+    y = (y_g) * resolution + y_min
+    return x, y

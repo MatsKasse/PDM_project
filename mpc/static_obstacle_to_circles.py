@@ -1,4 +1,6 @@
 from shapely.geometry import Polygon
+import numpy as np
+import pybullet as p
 
 def _get_content_dict(obst):
     if hasattr(obst, "content_dict"):
@@ -54,6 +56,17 @@ def static_obstacles_to_circles(walls, boxes, cylinders,
             s += spacing
 
     return circles
+
+
+def draw_circle_pybullet(x, y, r, z=0.05, color=[1, 0, 0], life_time=0, N=4):
+    ids = []
+    for i in range(N):
+        th1 = 2*np.pi * i / N
+        th2 = 2*np.pi * (i+1) / N
+        p1 = [x + r*np.cos(th1), y + r*np.sin(th1), z]
+        p2 = [x + r*np.cos(th2), y + r*np.sin(th2), z]
+        ids.append(p.addUserDebugLine(p1, p2, color, lineWidth=1.5, lifeTime=life_time))
+    return ids
 
 def filter_circles_near_robot(static_circles, x, y, r_query=3.0):
     out = []
