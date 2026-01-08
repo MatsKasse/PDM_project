@@ -3,6 +3,7 @@ import numpy as np
 import pybullet as p
 import A_star.Gridmap as gm
 import gymnasium as gym
+import time
 
 from scipy.interpolate import splprep, splev
 
@@ -17,7 +18,9 @@ from mpc.mpc_osqp import LinearMPCOSQP, predict_dynamic_obstacles
 from mpc.static_obstacle_to_circles import static_obstacles_to_circles, filter_circles_near_robot, filter_circles_near_robot_capped
 
 from A_star.a_star import *
+from evaluation_metrics import *
 
+t_wall_start = time.perf_counter()
 
 #start world coordinates
 sx = 5
@@ -69,11 +72,17 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             spawn_offset = np.array([sx, sy, 0.15]),
             spawn_rotation= -0.5*np.pi,
             facing_direction='-y',),]
+    if p.isConnected():
+        p.disconnect()
+
+    p.connect(p.DIRECT if not render else p.GUI)
     
     env: UrdfEnv = UrdfEnv(dt=0.08, robots=robots, render=render, observation_checking=False)
     ob, info = env.reset(pos=np.array([0.0, 0, 0.0, 0.0, 0.0, 0.0, -1.5, 0.0, 1.8, 0.5]))
 
-    
+    if t % 100 == 0:
+        print(f"Step {t}, sim time = {t * env.dt:.2f} s")
+
 
 #Part of Bram ========================================================================
     #Calculate path length
@@ -171,10 +180,15 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     
     print('coordinate check', sx_g, sy_g, gx_g, gy_g)
 
+    t0 = time.perf_counter()
+
     #Initialize A* planner and plan path
     A_star = AStarPlanner(resolution, inflated_grid, x_min, y_min)
+    a_star_time = time.perf_counter() - t0
     rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g, gy_g, weight_clearance=clearance_weight) #weight_clearance --> the clearance to objects
     rx_w, ry_w = zip(*[grid_to_world(x, y, x_min, y_min) for x, y in zip(rx_g, ry_g)])
+
+    print(f"A* planning time: {a_star_time*1000:.2f} ms")
     
     
     #Smooth the path
@@ -309,16 +323,44 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     
     clear_debug_items(path_ids)
     env.close()
-    return history
+    if p.isConnected():
+            p.disconnect()
+    return {
+        "history": history,
+        "planned_path": path_xy,
+        "a_star_time": a_star_time
+        }
 
 if __name__ == "__main__":
     show_warnings = False
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore" if not show_warnings else "default")
         
-        history = run_albert(
-            n_steps=3000, 
-            render=True,
-            path_type="S",  # Options: "straight", "L", "S"
-            path_length=5.0
+        # history = run_albert(
+        #     n_steps=3000, 
+        #     render=True,
+        #     path_type="S",  # Options: "straight", "L", "S"
+        #     path_length=5.0
+        # )
+
+        results = []  # store results of multiple runs
+
+        for i in range(2):  # run multiple trials
+            result = run_albert(n_steps=3000, render=False)
+            results.append(result)
+
+        planned_path_xy = result["planned_path"]  # from A*
+        a_star_time = result["timing"]["a_star_time"]
+        goal = (gx, gy)
+
+        df, trajectories = evaluate_multiple_runs(
+            results["history"],
+            planned_path_xy,
+            goal
         )
+
+        print(df)
+        print(summarize_metrics(df))
+
+        plot_trajectories(trajectories, planned_path_xy)
+        plot_metrics(df)
