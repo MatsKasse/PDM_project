@@ -119,6 +119,30 @@ def plot_metrics(df):
     plt.tight_layout()
     plt.show()
 
+def plot_metrics_test(metrics_list, resolutions):
+    
+    fig, axs = plt.subplots(1, 3, figsize=(15, 4))
+
+    axs[0].boxplot(metrics_list["computation_times"])
+    axs[0].set_title("A* Computation Time [s]")
+
+    axs[1].boxplot(metrics_list["path_lengths"])
+    axs[1].set_title("Computed Path Length [m]")
+
+    axs_2_twin = axs[2].twinx()
+    axs[2].plot(resolutions, np.array(metrics_list["computation_times"]), 'o-')
+    axs_2_twin.plot(resolutions, metrics_list["path_lengths"], 'ro-')
+    axs_2_twin.set_ylim(max(metrics_list["path_lengths"]) * 0.85, max(metrics_list["path_lengths"]) * 1.15)
+    axs_2_twin.set_ylabel("Path Length [m]", color='r')
+    axs[2].set_title("Computation Time vs Resolution")
+    axs[2].set_xlabel("Grid Resolution [m]")
+    axs[2].set_ylabel("Computation Time [s]", color='b')
+
+    for ax in axs:
+        ax.grid()
+
+    plt.tight_layout()
+    plt.show()
 
 # ============================================================
 # Summary Table (LaTeX-ready)

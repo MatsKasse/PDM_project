@@ -22,13 +22,15 @@ from evaluation_metrics import *
 
 t_wall_start = time.perf_counter()
 
+test_planner = True
+
 #start world coordinates
 sx = 5
-sy = 5
+sy = 7.5
 
 #goal world coordinates
 gx = 0
-gy = -3
+gy = -2.5
 
 #Parameters
 robot_radius = 0.3 # robot radius in meters
@@ -128,7 +130,7 @@ def run_albert(n_steps=1000, render=True, path_type="straight", path_length=3.0)
     for cylinder in cylinder_obstacles:
         env.add_obstacle(cylinder)
 
-    dynamic_obstacle = True
+    dynamic_obstacle = not test_planner
 
     if dynamic_obstacle is True:
         for dyn_obst in dynamic_sphere_obstacles:
@@ -167,23 +169,26 @@ def run_albert(n_steps=1000, render=True, path_type="straight", path_length=3.0)
     
 
     #Check if start and goal are in free space
-    if inflated_grid[sx_g, sy_g] == 1:
+    if inflated_grid[sy_g, sx_g] == 1:
         print("Start is inside an obstacle, please change start position.")
     else:
         print("Start is free.")
-    if inflated_grid[gx_g, gy_g] == 1:
+    if inflated_grid[gy_g, gx_g] == 1:
         print("Goal is inside an obstacle, please change goal position.")
     else:
         print("Goal is free.")
     
     print('coordinate check', sx_g, sy_g, gx_g, gy_g)
 
-    t0 = time.perf_counter()
+    
 
     #Initialize A* planner and plan path
     A_star = AStarPlanner(resolution, inflated_grid, x_min, y_min)
-    a_star_time = time.perf_counter() - t0
+    
+    t0 = time.perf_counter()
     rx_g, ry_g = A_star.planning(sx_g, sy_g, gx_g, gy_g, weight_clearance=clearance_weight) #weight_clearance --> the clearance to objects
+    a_star_time = time.perf_counter() - t0
+
     rx_w, ry_w = zip(*[grid_to_world(x, y, x_min, y_min) for x, y in zip(rx_g, ry_g)])
 
     print(f"A* planning time: {a_star_time*1000:.2f} ms")
@@ -196,133 +201,136 @@ def run_albert(n_steps=1000, render=True, path_type="straight", path_length=3.0)
 
     distance = get_distance(rx_w, ry_w)
     print('distance = ',distance)
-    show_solution(grid, inflated_grid, rx_w_smooth, ry_w_smooth, rx_w, ry_w)
+    #show_solution(grid, inflated_grid, rx_w_smooth, ry_w_smooth, rx_w, ry_w)
+
+    if not test_planner:
+        
+    # Part of Mats ===================================================================== 
+        robot_id = 1
+        set_robot_body_id(robot_id)
+        
+
+        # Get initial state (now correctly returns -90° for -y facing robot)
+        x0 = extract_base_state()
+        print(f"\n{'='*60}")
+        print(f"Initial state: pos=({x0[0]:.3f}, {x0[1]:.3f}), theta={np.degrees(x0[2]):.1f}°")
+
+        # Create path aligned with robot's actual heading
+        # path = create_aligned_path(x0[0], x0[1], x0[2], path_type, path_length)
+        path = path_xy[::-1]
+        ref = PolylineReference(path, ds=0.1, v_ref=1.2)   #ds is the resampling interval. Smaller means dense waypoints, more noice
+                                                            # Larger ds means fewer reference updates, smoother. But cutting corners.
+                                                            #
+        path_ids = draw_polyline(ref.path, z=0.1, line_width=6.0, life_time=0) # Draw path
+        goal_pos = (gx,gy)
+        goal_threshold = 0.20  # meters; stop when within this distance of goal
+        
+
+        dx = path[1,0] - path[0,0]
+        dy = path[1,1] - path[0,1]
+        theta_tangent = np.arctan2(dy, dx)
+        
 
 
- # Part of Mats ===================================================================== 
-    robot_id = 1
-    set_robot_body_id(robot_id)
-    
+        # MPC setup
+        Ts_mpc = 0.08 #sample period between control decisions made by the MPC. Increase for slower reaction time, lower computation, faster robot.
+                        #Decrease when sharp turns, obstacles, more chances per second to correct errors. But increase horizon
+        N = 35    #Horizon, amount of steps it looks forward. (basically N * Ts_mpc = seconds looking forward.)
+        steps_per_mpc = int(round(Ts_mpc / env.dt))
+        Q_matrix = np.diag([20.0, 20.0, 1.0, 1.0])  # Position and sin/cos tracking
+        R_matrix = np.diag([20, 20])          # Control effort (v, w)
+        P_matrix = np.diag([60.0, 60.0, 15.0, 15.0])  # Terminal cost
+        
+        mpc = LinearMPCOSQP(
+            Ts= Ts_mpc, 
+            N= N,
+            Q= Q_matrix,  
+            R= R_matrix,  
+            P= P_matrix,  
+            vmin= -0.5,
+            vmax= 1.5, 
+            wmax= 1.5)
 
-    # Get initial state (now correctly returns -90° for -y facing robot)
-    x0 = extract_base_state()
-    print(f"\n{'='*60}")
-    print(f"Initial state: pos=({x0[0]:.3f}, {x0[1]:.3f}), theta={np.degrees(x0[2]):.1f}°")
+        u_last = np.array([0.0, 0.0])
+        
+        history = []
+        def state_to_sincos(x_state):
+            return np.array([x_state[0], x_state[1], np.sin(x_state[2]), np.cos(x_state[2])], dtype=float)
 
-    # Create path aligned with robot's actual heading
-    # path = create_aligned_path(x0[0], x0[1], x0[2], path_type, path_length)
-    path = path_xy[::-1]
-    ref = PolylineReference(path, ds=0.1, v_ref=1.2)   #ds is the resampling interval. Smaller means dense waypoints, more noice
-                                                        # Larger ds means fewer reference updates, smoother. But cutting corners.
-                                                        #
-    path_ids = draw_polyline(ref.path, z=0.1, line_width=6.0, life_time=0) # Draw path
-    goal_pos = (gx,gy)
-    goal_threshold = 0.20  # meters; stop when within this distance of goal
-    
+        def min_obs_clearance(pos_xy, obs_pred):
+            if not obs_pred:
+                return None
+            min_clear = None
+            for step in obs_pred:
+                for ox, oy, r_safe in step:
+                    clear = np.hypot(pos_xy[0] - ox, pos_xy[1] - oy) - r_safe
+                    if min_clear is None or clear < min_clear:
+                        min_clear = clear
+            return min_clear
 
-    dx = path[1,0] - path[0,0]
-    dy = path[1,1] - path[0,1]
-    theta_tangent = np.arctan2(dy, dx)
-    
+        for t in range(n_steps): #basically for all t in simulation
+            x = extract_base_state() #Extract pose
+            x_mpc = state_to_sincos(x)
 
+            dist_to_goal = np.linalg.norm([x[0] - goal_pos[0], x[1] - goal_pos[1]])
 
-    # MPC setup
-    Ts_mpc = 0.08 #sample period between control decisions made by the MPC. Increase for slower reaction time, lower computation, faster robot.
-                    #Decrease when sharp turns, obstacles, more chances per second to correct errors. But increase horizon
-    N = 35    #Horizon, amount of steps it looks forward. (basically N * Ts_mpc = seconds looking forward.)
-    steps_per_mpc = int(round(Ts_mpc / env.dt))
-    Q_matrix = np.diag([20.0, 20.0, 1.0, 1.0])  # Position and sin/cos tracking
-    R_matrix = np.diag([20, 20])          # Control effort (v, w)
-    P_matrix = np.diag([60.0, 60.0, 15.0, 15.0])  # Terminal cost
-    
-    mpc = LinearMPCOSQP(
-        Ts= Ts_mpc, 
-        N= N,
-        Q= Q_matrix,  
-        R= R_matrix,  
-        P= P_matrix,  
-        vmin= -0.5,
-        vmax= 1.5, 
-        wmax= 1.5)
+            if dist_to_goal <= goal_threshold:
+                u_last[:] = 0.0
+                action = build_action(env.n(), v=0.0, w=0.0)
+                ob, reward, terminated, truncated, info = env.step(action)
+                history.append((x.copy(), u_last.copy(), ob))
+                print(f"\nReached goal within {goal_threshold} m (dist={dist_to_goal:.3f} m). Stopping.")
+                break
 
-    u_last = np.array([0.0, 0.0])
-    
-    history = []
-    def state_to_sincos(x_state):
-        return np.array([x_state[0], x_state[1], np.sin(x_state[2]), np.cos(x_state[2])], dtype=float)
+            # Update MPC at specified rate
+            if t % steps_per_mpc == 0:
+                x_ref, u_ref = ref.horizon(x[0], x[1], x[2], N, use_sincos=True, use_shortest_angle=True, threshold=goal_threshold)
+                
 
-    def min_obs_clearance(pos_xy, obs_pred):
-        if not obs_pred:
-            return None
-        min_clear = None
-        for step in obs_pred:
-            for ox, oy, r_safe in step:
-                clear = np.hypot(pos_xy[0] - ox, pos_xy[1] - oy) - r_safe
-                if min_clear is None or clear < min_clear:
-                    min_clear = clear
-        return min_clear
+                t_attr = getattr(env, "t", None)
+                t_now = t_attr() if callable(t_attr) else t * env.dt
 
-    for t in range(n_steps): #basically for all t in simulation
-        x = extract_base_state() #Extract pose
-        x_mpc = state_to_sincos(x)
+                # static_local = filter_circles_near_robot(static_circles_all, x[0], x[1], r_query=3.0)
+                static_local = filter_circles_near_robot_capped(static_circles_all, x[0], x[1], r_query=3.0, M_MAX=60)
 
-        dist_to_goal = np.linalg.norm([x[0] - goal_pos[0], x[1] - goal_pos[1]])
+                K = 20
 
-        if dist_to_goal <= goal_threshold:
-            u_last[:] = 0.0
-            action = build_action(env.n(), v=0.0, w=0.0)
+                static_pred = [static_local if k <= K else [] for k in range(N+1)]
+
+                if dynamic_obstacle is True:
+                    dyn_obs_pred = predict_dynamic_obstacles(dynamic_sphere_obstacles, t_now, N, Ts_mpc)
+                else:
+                    dyn_obs_pred = [[] for _ in range(N+1)]
+
+                
+                obs_pred = [dyn_obs_pred[k] + static_pred[k] for k in range(N+1)]
+
+                u_last, res = mpc.solve(x_mpc, x_ref, u_ref, obs_pred=obs_pred)
+        
+            if t % (steps_per_mpc * 50) == 0:
+                print(f"static_local len = {len(static_local)} (should be M_MAX)")
+
+            # Apply control
+            action = build_action(env.n(), v=u_last[0], w=u_last[1])
             ob, reward, terminated, truncated, info = env.step(action)
-            history.append((x.copy(), u_last.copy(), ob))
-            print(f"\nReached goal within {goal_threshold} m (dist={dist_to_goal:.3f} m). Stopping.")
-            break
-
-        # Update MPC at specified rate
-        if t % steps_per_mpc == 0:
-            x_ref, u_ref = ref.horizon(x[0], x[1], x[2], N, use_sincos=True, use_shortest_angle=True, threshold=goal_threshold)
             
-
-            t_attr = getattr(env, "t", None)
-            t_now = t_attr() if callable(t_attr) else t * env.dt
-
-            # static_local = filter_circles_near_robot(static_circles_all, x[0], x[1], r_query=3.0)
-            static_local = filter_circles_near_robot_capped(static_circles_all, x[0], x[1], r_query=3.0, M_MAX=60)
-
-            K = 20
-
-            static_pred = [static_local if k <= K else [] for k in range(N+1)]
-
-            if dynamic_obstacle is True:
-                dyn_obs_pred = predict_dynamic_obstacles(dynamic_sphere_obstacles, t_now, N, Ts_mpc)
-            else:
-                dyn_obs_pred = [[] for _ in range(N+1)]
-
+            history.append((x.copy(), u_last.copy(), ob))  #useful information: True state, controll inputs, observations from simulation.
             
-            obs_pred = [dyn_obs_pred[k] + static_pred[k] for k in range(N+1)]
+            if terminated or truncated:
+                print(f"\n Terminated or Truncated at step {t}, see if collided or reached goal")
+                print(info)
+                break
 
-            u_last, res = mpc.solve(x_mpc, x_ref, u_ref, obs_pred=obs_pred)
-    
-        if t % (steps_per_mpc * 50) == 0:
-            print(f"static_local len = {len(static_local)} (should be M_MAX)")
-
-        # Apply control
-        action = build_action(env.n(), v=u_last[0], w=u_last[1])
-        ob, reward, terminated, truncated, info = env.step(action)
+        # Final results
+        x_final = extract_base_state()
+        dist_to_goal = np.linalg.norm([x_final[0] - goal_pos[0], x_final[1] - goal_pos[1]])
         
-        history.append((x.copy(), u_last.copy(), ob))  #useful information: True state, controll inputs, observations from simulation.
-        
-        if terminated or truncated:
-            print(f"\n Terminated or Truncated at step {t}, see if collided or reached goal")
-            print(info)
-            break
-
-    # Final results
-    x_final = extract_base_state()
-    dist_to_goal = np.linalg.norm([x_final[0] - goal_pos[0], x_final[1] - goal_pos[1]])
+        clear_debug_items(path_ids)
+    else:
+        history = None
     
-    clear_debug_items(path_ids)
     env.close()
-    if p.isConnected():
-            p.disconnect()
+
     return {
         "history": history,
         "planned_path": path_xy,
@@ -343,22 +351,60 @@ if __name__ == "__main__":
 
         results = []  # store results of multiple runs
 
-        for i in range(3):  # run multiple trials
-            result = run_albert(n_steps=3000, render=False)
-            results.append(result)
+        if not test_planner:
+            for i in range(10):  # run multiple trials
+                result = run_albert(n_steps=3000, render=False)
+                results.append(result)
 
-        planned_path_xy = result["planned_path"]  # from A*
-        a_star_time = result["a_star_time"]
-        goal = (gx, gy)
+            planned_path_xy = result["planned_path"]  # from A*
+            a_star_time = result["a_star_time"]
+            goal = (gx, gy)
 
-        df, trajectories = evaluate_multiple_runs(
-            results[0]["history"],
-            planned_path_xy,
-            goal
-        )
+            df, trajectories = evaluate_multiple_runs(
+                results[0]["history"],
+                planned_path_xy,
+                goal
+            )
 
-        print(df)
-        print(summarize_metrics(df))
+            print(df)
+            print(summarize_metrics(df))
 
-        plot_trajectories(trajectories, planned_path_xy)
-        plot_metrics(df)
+            plot_trajectories(trajectories, planned_path_xy)
+            plot_metrics(df)
+        
+        else:
+            resolutions = []
+            destination_positions = [
+                    (-8, -9.5),
+                    (-5.5, 8), 
+                    (9, 0),
+                    (2.7, -8),
+                    (-4, 0),
+                    (0, 9.5),
+                    (4, -9.5)
+                    (-4.5, -5),
+                    (9.5, -8),
+                    (2, -3.5)
+                    ]
+            for i in range(10):  # run multiple trials
+                resolution = 0.03 + i * 0.01  # vary resolution from 0.03 to 0.12
+                resolutions.append(resolution)
+
+                result = run_albert(n_steps=3000, render=False)
+                results.append(result)
+
+                print("resolution:", resolution)
+
+            metrics_list = {"computation_times": [], "path_lengths": []}
+
+            for result in results:
+                a_star_time = result["a_star_time"]
+                path_length = compute_path_length(result["planned_path"])
+                metrics_list["computation_times"].append(a_star_time)
+                metrics_list["path_lengths"].append(path_length)
+            
+            # print("A* Computation Times (s):", metrics_list["computation_times"])
+            # print("Planned Path Lengths (m):", metrics_list["path_lengths"])
+            # print("Resolutions (m):", resolutions)
+
+            plot_metrics_test(metrics_list, resolutions)
