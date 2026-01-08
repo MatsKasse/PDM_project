@@ -60,7 +60,7 @@ def draw_circle_pybullet(x, y, r, z=0.05, color=[1, 0, 0], life_time=0, N=4):
     return ids
 
 #setup and run albert with A* and MPC
-def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0):
+def run_albert(n_steps=1000, render=True, path_type="straight", path_length=3.0):
     robots = [
         GenericDiffDriveRobot(
             urdf="albert.urdf",
@@ -72,16 +72,14 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             spawn_offset = np.array([sx, sy, 0.15]),
             spawn_rotation= -0.5*np.pi,
             facing_direction='-y',),]
-    if p.isConnected():
-        p.disconnect()
+    # if p.isConnected():
+    #     p.disconnect()
 
-    p.connect(p.DIRECT if not render else p.GUI)
+    # p.connect(p.DIRECT if not render else p.GUI)
     
     env: UrdfEnv = UrdfEnv(dt=0.08, robots=robots, render=render, observation_checking=False)
     ob, info = env.reset(pos=np.array([0.0, 0, 0.0, 0.0, 0.0, 0.0, -1.5, 0.0, 1.8, 0.5]))
 
-    if t % 100 == 0:
-        print(f"Step {t}, sim time = {t * env.dt:.2f} s")
 
 
 #Part of Bram ========================================================================
@@ -345,16 +343,16 @@ if __name__ == "__main__":
 
         results = []  # store results of multiple runs
 
-        for i in range(2):  # run multiple trials
+        for i in range(3):  # run multiple trials
             result = run_albert(n_steps=3000, render=False)
             results.append(result)
 
         planned_path_xy = result["planned_path"]  # from A*
-        a_star_time = result["timing"]["a_star_time"]
+        a_star_time = result["a_star_time"]
         goal = (gx, gy)
 
         df, trajectories = evaluate_multiple_runs(
-            results["history"],
+            results[0]["history"],
             planned_path_xy,
             goal
         )
