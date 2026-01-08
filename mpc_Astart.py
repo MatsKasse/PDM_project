@@ -60,16 +60,14 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             spawn_offset = np.array([sx, sy, 0.15]),
             spawn_rotation= -0.5*np.pi,
             facing_direction='-y',),]
-    if p.isConnected():
-        p.disconnect()
+    # if p.isConnected():
+    #     p.disconnect()
 
-    p.connect(p.DIRECT if not render else p.GUI)
-    
+    # p.connect(p.DIRECT if not render else p.GUI)
+    # p.resetSimulation()
+
     env: UrdfEnv = UrdfEnv(dt=0.08, robots=robots, render=render, observation_checking=False)
     ob, info = env.reset(pos=np.array([0.0, 0, 0.0, 0.0, 0.0, 0.0, -1.5, 0.0, 1.8, 0.5]))
-
-    if t % 100 == 0:
-        print(f"Step {t}, sim time = {t * env.dt:.2f} s")
 
 
 #Part of Bram ========================================================================
@@ -278,14 +276,24 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             print(info)
             break
 
+        # --- end wall-clock timer ---
+        wall_time = time.perf_counter() - t_wall_start
+        print(f"Wall-clock run time: {wall_time:.2f} s")
+
+        # simulated time (THIS is what you use for metrics)
+        sim_time = len(history) * env.dt
+        print(f"Simulated time: {sim_time:.2f} s")
+
     # Final results
     x_final = extract_base_state()
     dist_to_goal = np.linalg.norm([x_final[0] - goal_pos[0], x_final[1] - goal_pos[1]])
     
     clear_debug_items(path_ids)
     env.close()
+    
     if p.isConnected():
-            p.disconnect()
+        p.disconnect()
+
     return {
         "history": history,
         "planned_path": path_xy,
@@ -307,11 +315,11 @@ if __name__ == "__main__":
         results = []  # store results of multiple runs
 
         for i in range(2):  # run multiple trials
-            result = run_albert(n_steps=3000, render=False)
+            result = run_albert(n_steps=3000, render=True)
             results.append(result)
 
         planned_path_xy = result["planned_path"]  # from A*
-        a_star_time = result["timing"]["a_star_time"]
+        a_star_time = result["a_star_time"]
         goal = (gx, gy)
 
         df, trajectories = evaluate_multiple_runs(
