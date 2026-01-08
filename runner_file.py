@@ -1,4 +1,5 @@
 import warnings
+import time
 import numpy as np
 import pybullet as p
 import gymnasium as gym
@@ -28,8 +29,8 @@ sx = 5
 sy = 5
 
 #goal world coordinates
-gx = 0
-gy = -3
+gx = 2
+gy = 5
 
 #Parameters
 robot_radius = 0.3 # robot radius in meters
@@ -46,7 +47,7 @@ goal_threshold = 0.2  # meters; stop when within this distance of goal
 # ============================setup and run albert with A* and MPC=====================================
 
 
-def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0):
+def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0, return_metrics=False):
     robots = [
         GenericDiffDriveRobot(
             urdf="albert.urdf",
@@ -71,6 +72,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     #     env.add_obstacle(box)
 
     dynamic_obstacle = True
+    wall_start = time.perf_counter()
 
     if dynamic_obstacle is True:
         for dyn_obst in dynamic_sphere_obstacles:
@@ -191,6 +193,13 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         if raw_path_list is None:
             print("Standard RRT Failed to find a path.")
             env.close()
+            if return_metrics:
+                return [], {
+                    "success": False,
+                    "sim_time_s": 0.0,
+                    "wall_time_s": time.perf_counter() - wall_start,
+                    "reason": "rrt_failed",
+                }
             return []
 
         # Spline Smoothing
@@ -249,6 +258,13 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         if raw_path_list is None:
             print("RRT* Failed to find a path.")
             env.close()
+            if return_metrics:
+                return [], {
+                    "success": False,
+                    "sim_time_s": 0.0,
+                    "wall_time_s": time.perf_counter() - wall_start,
+                    "reason": "rrt_star_failed",
+                }
             return []
 
         # Spline Smoothing
@@ -342,6 +358,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     u_last = np.array([0.0, 0.0])
     
     history = []
+    steps_taken = 0
+    reached_goal = False
     def state_to_sincos(x_state):
         return np.array([x_state[0], x_state[1], np.sin(x_state[2]), np.cos(x_state[2])], dtype=float)
 
@@ -367,6 +385,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             action = build_action(env.n(), v=0.0, w=0.0)
             ob, reward, terminated, truncated, info = env.step(action)
             history.append((x.copy(), u_last.copy(), ob))
+            steps_taken += 1
+            reached_goal = True
             print(f"\nReached goal within {goal_threshold} m (dist={dist_to_goal:.3f} m). Stopping.")
             break
 
@@ -401,20 +421,33 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         # Apply control
         action = build_action(env.n(), v=u_last[0], w=u_last[1])
         ob, reward, terminated, truncated, info = env.step(action)
+        steps_taken += 1
         
         history.append((x.copy(), u_last.copy(), ob))  #useful information: True state, controll inputs, observations from simulation.
         
         if terminated or truncated:
             print(f"\n Terminated or Truncated at step {t}, see if collided or reached goal")
-            print(info)
+            # print(info)
             break
 
     # Final results
     x_final = extract_base_state()
     dist_to_goal = np.linalg.norm([x_final[0] - goal_pos[0], x_final[1] - goal_pos[1]])
+    success = reached_goal or (dist_to_goal <= goal_threshold)
+    sim_time_s = steps_taken * env.dt
+    wall_time_s = time.perf_counter() - wall_start
     
     clear_debug_items(path_ids)
     env.close()
+    
+    if return_metrics:
+        return history, {
+            "success": success,
+            "sim_time_s": sim_time_s,
+            "wall_time_s": wall_time_s,
+            "steps": steps_taken,
+            "final_dist": float(dist_to_goal),
+        }
     return history
 
 if __name__ == "__main__":
@@ -422,9 +455,20 @@ if __name__ == "__main__":
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore" if not show_warnings else "default")
         
-        history = run_albert(
-            n_steps=3000, 
-            render=True,
-            path_type="S",  # Options: "straight", "L", "S"
-            path_length=5.0
-        )
+       
+        results = []  # store results of multiple runs
+        successes = 0
+        n_runs = 2
+
+        for i in range(n_runs):  # run multiple trials
+            history, metrics = run_albert(n_steps=3000, render=True, return_metrics=True)
+            results.append({"history": history, "metrics": metrics})
+            successes += int(metrics["success"])
+            print(
+                f"Run {i + 1}/{n_runs}: success={metrics['success']}, "
+                f"sim_time={metrics['sim_time_s']:.2f}s, wall_time={metrics['wall_time_s']:.2f}s, "
+                f"steps={metrics['steps']}, final_dist={metrics['final_dist']:.3f}"
+            )
+
+        success_rate = successes / n_runs if n_runs else 0.0
+        print(f"\nSuccess rate: {successes}/{n_runs} = {success_rate:.2%}")
