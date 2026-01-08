@@ -58,7 +58,7 @@ def static_obstacles_to_circles(walls, boxes, cylinders,
     return circles
 
 
-def draw_circle_pybullet(x, y, r, z=0.05, color=[1, 0, 0], life_time=0, N=4):
+def draw_circle_pybullet(x, y, r, z=0.05, color=[1, 0, 0], life_time=0, N=2):
     ids = []
     for i in range(N):
         th1 = 2*np.pi * i / N
