@@ -31,6 +31,11 @@ def path_efficiency(executed_length, planned_length):
         return np.nan
     return executed_length / planned_length
 
+def avg_length(paths):
+    for i in range(len(paths)):
+        length = compute_path_length(paths[i])
+    return length / len(paths)
+
 
 # ============================================================
 # Main Evaluation Wrapper

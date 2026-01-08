@@ -4,6 +4,7 @@ import pybullet as p
 import A_star.Gridmap as gm
 import gymnasium as gym
 import time
+from tqdm import tqdm
 
 from scipy.interpolate import splprep, splev
 
@@ -22,15 +23,15 @@ from evaluation_metrics import *
 
 t_wall_start = time.perf_counter()
 
-test_planner = True
+test_planner = True  # Set to True to test A* planner separately
 
 #start world coordinates
 sx = 5
 sy = 7.5
 
 #goal world coordinates
-gx = 0
-gy = -2.5
+gx = 2
+gy = -3.4
 
 #Parameters
 robot_radius = 0.3 # robot radius in meters
@@ -130,11 +131,12 @@ def run_albert(n_steps=1000, render=True, path_type="straight", path_length=3.0)
     for cylinder in cylinder_obstacles:
         env.add_obstacle(cylinder)
 
-    dynamic_obstacle = not test_planner
+    dynamic_obstacle = False#not test_planner
 
     if dynamic_obstacle is True:
         for dyn_obst in dynamic_sphere_obstacles:
             env.add_obstacle(dyn_obst)
+
     for box in box_obstacles:
         env.add_obstacle(box)
     
@@ -201,10 +203,10 @@ def run_albert(n_steps=1000, render=True, path_type="straight", path_length=3.0)
 
     distance = get_distance(rx_w, ry_w)
     print('distance = ',distance)
-    #show_solution(grid, inflated_grid, rx_w_smooth, ry_w_smooth, rx_w, ry_w)
+    
 
     if not test_planner:
-        
+        show_solution(grid, inflated_grid, rx_w_smooth, ry_w_smooth, rx_w, ry_w)
     # Part of Mats ===================================================================== 
         robot_id = 1
         set_robot_body_id(robot_id)
@@ -377,34 +379,58 @@ if __name__ == "__main__":
             destination_positions = [
                     (-8, -9.5),
                     (-5.5, 8), 
-                    (9, 0),
-                    (2.7, -8),
+                    (9.2, 0),
+                    (2.5, -8),
                     (-4, 0),
-                    (0, 9.5),
-                    (4, -9.5)
-                    (-4.5, -5),
-                    (9.5, -8),
-                    (2, -3.5)
+                    (0, 9.8),
+                    (4, -9.5),
+                    (-4.4, -5),
+                    (9.8, -8),
+                    (2, -3.4)
                     ]
-            for i in range(10):  # run multiple trials
-                resolution = 0.03 + i * 0.01  # vary resolution from 0.03 to 0.12
+
+            for i in tqdm(range(5)):  # run multiple trials
+                resolution = round(0.05 + i * 0.01, 2)  # vary resolution from 0.03 to 0.12
                 resolutions.append(resolution)
+                compute_times = []
+                path_lengths = []
+                for coords in tqdm(destination_positions):
+                    gx, gy = coords
+                    print('resolution:', resolution, 'goal:', gx, gy)
+                    result = run_albert(n_steps=3000, render=False)
+                    path_length = compute_path_length(result["planned_path"])
+                    path_lengths.append(path_length)
+                    compute_times.append(result["a_star_time"])
+                results.append({
+                    "resolution": resolution,
+                    "compute_time": compute_times,
+                    "path_length": path_lengths,
+                })
 
-                result = run_albert(n_steps=3000, render=False)
-                results.append(result)
 
-                print("resolution:", resolution)
 
-            metrics_list = {"computation_times": [], "path_lengths": []}
+            plt.figure()
 
-            for result in results:
-                a_star_time = result["a_star_time"]
-                path_length = compute_path_length(result["planned_path"])
-                metrics_list["computation_times"].append(a_star_time)
-                metrics_list["path_lengths"].append(path_length)
-            
-            # print("A* Computation Times (s):", metrics_list["computation_times"])
-            # print("Planned Path Lengths (m):", metrics_list["path_lengths"])
-            # print("Resolutions (m):", resolutions)
+            for d in results:
+                print(d)
+                scatter = plt.scatter(
+                    d["path_length"],
+                    d["compute_time"],
+                    label=f"res = {d['resolution']:.2f}"
+                )
+                color = scatter.get_facecolor()[0]
+                
+                z = np.polyfit(d["path_length"], d["compute_time"], 1)
+                p = np.poly1d(z)
 
-            plot_metrics_test(metrics_list, resolutions)
+                x = np.array(d["path_length"])
+                x_sorted = np.sort(x)
+                print("scatter_color = ", scatter.get_facecolor())
+                plt.plot(x_sorted, p(x_sorted), color=color, linestyle='--')
+
+            plt.xlabel("Path length [m]")
+            plt.ylabel("Compute time [s]")
+            plt.title("A* Performance vs Resolution")
+            plt.legend()
+            plt.grid(True)
+            plt.show()
