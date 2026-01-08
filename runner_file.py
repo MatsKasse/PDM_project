@@ -25,20 +25,39 @@ from RRT_definitions import *
 
 
 #start world coordinates
-sx = 5
-sy = 5
+sx = 7.5
+sy = 7.5
 
 #goal world coordinates
-gx = 2
-gy = 5
+n_runs = 1
+gx = -6.5
+gy = 9
+
+
+point_1 = (gx, gy)
+point_2 = (-2, 8)
+point_3 = (-4, 5)
+point_4 = (-4.5, 0)
+point_5 = (-8.25, -5) ##Start is free. Goal is inside an obstacle, please change goal position.
+point_6 = (0, 0)
+point_7 = (-6.25, -8)
+point_8 = (2.25, -8)
+point_9 = (9.25, 1) ##Start is free. Goal is inside an obstacle, please change goal position.
+point_10 = (8.5, -5) ##Start is free. Goal is inside an obstacle, please change goal position.
+
+point_list =np.array([point_1, point_2, point_3, point_4, point_5, point_6, point_7, point_8, point_9, point_10])
+
+
 
 #Parameters
+render = True
+dynamic_obstacle = True
 robot_radius = 0.3 # robot radius in meters
 clearance_weight = 0.5 # weight for clearance in A* cost function
 resolution = 0.09 # grid resolution in meters
-# global_planner = "A_STAR"
+global_planner = "A_STAR"
 # global_planner = "RRT_STAR"
-global_planner = "RRT"
+# global_planner = "RRT"
 
 goal_threshold = 0.2  # meters; stop when within this distance of goal
 
@@ -47,7 +66,7 @@ goal_threshold = 0.2  # meters; stop when within this distance of goal
 # ============================setup and run albert with A* and MPC=====================================
 
 
-def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0, return_metrics=False):
+def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0, return_metrics=False, dynamic_obstacle = True):
     robots = [
         GenericDiffDriveRobot(
             urdf="albert.urdf",
@@ -63,15 +82,19 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     env: UrdfEnv = UrdfEnv(dt=0.08, robots=robots, render=render, observation_checking=False)
     ob, info = env.reset(pos=np.array([0.0, 0, 0.0, 0.0, 0.0, 0.0, -1.5, 0.0, 1.8, 0.5]))
 
+    
+
+
+
 #Set up obstacles in the environment
     for wall in wall_obstacles:
         env.add_obstacle(wall)
     for cylinder in cylinder_obstacles:
         env.add_obstacle(cylinder)
-    # for box in box_obstacles:
-    #     env.add_obstacle(box)
+    for box in box_obstacles:
+        env.add_obstacle(box)
 
-    dynamic_obstacle = True
+    
     wall_start = time.perf_counter()
 
     if dynamic_obstacle is True:
@@ -79,7 +102,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             env.add_obstacle(dyn_obst)
     
     
-    static_circles_all = static_obstacles_to_circles(wall_obstacles, box_obstacles, cylinder_obstacles, robot_radius=robot_radius, margin= 0, sample_radius=0.1)
+    static_circles_all = static_obstacles_to_circles(wall_obstacles, box_obstacles, cylinder_obstacles, robot_radius=robot_radius, margin= 0.1, sample_radius=0.1)
     static_circle_ids = []
 
     draw_obstacles = False #Set True to see the avoided obstacles outlining.
@@ -343,7 +366,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     steps_per_mpc = int(round(Ts_mpc / env.dt))
     Q_matrix = np.diag([20.0, 20.0, 1.0, 1.0])  # Position and sin/cos tracking
     R_matrix = np.diag([20, 20])          # Control effort (v, w)
-    P_matrix = np.diag([60.0, 60.0, 15.0, 15.0])  # Terminal cost
+    P_matrix = np.diag([60, 60, 15, 15])  # Terminal cost
     
     mpc = LinearMPCOSQP(
         Ts= Ts_mpc, 
@@ -398,7 +421,6 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             t_attr = getattr(env, "t", None)
             t_now = t_attr() if callable(t_attr) else t * env.dt
 
-            # static_local = filter_circles_near_robot(static_circles_all, x[0], x[1], r_query=3.0)
             static_local = filter_circles_near_robot_capped(static_circles_all, x[0], x[1], r_query=3.0, M_MAX=60)
 
             K = 20
@@ -457,18 +479,24 @@ if __name__ == "__main__":
         
        
         results = []  # store results of multiple runs
+        run_summaries = []
         successes = 0
-        n_runs = 2
+        n_runs = n_runs
 
         for i in range(n_runs):  # run multiple trials
-            history, metrics = run_albert(n_steps=3000, render=True, return_metrics=True)
+            gx, gy = point_list[i]
+            history, metrics = run_albert(n_steps=3000, render=render, return_metrics=True, dynamic_obstacle=dynamic_obstacle)
             results.append({"history": history, "metrics": metrics})
             successes += int(metrics["success"])
-            print(
+            line = ([
                 f"Run {i + 1}/{n_runs}: success={metrics['success']}, "
                 f"sim_time={metrics['sim_time_s']:.2f}s, wall_time={metrics['wall_time_s']:.2f}s, "
                 f"steps={metrics['steps']}, final_dist={metrics['final_dist']:.3f}"
-            )
+            ])
+            run_summaries.append(line)
+            print(line)
+
 
         success_rate = successes / n_runs if n_runs else 0.0
+        print(run_summaries)
         print(f"\nSuccess rate: {successes}/{n_runs} = {success_rate:.2%}")
