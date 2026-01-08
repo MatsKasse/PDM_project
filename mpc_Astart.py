@@ -14,17 +14,18 @@ from urdfenvs.urdf_common.urdf_env import UrdfEnv
 from mpc.reference_generator import PolylineReference, draw_polyline, clear_debug_items, wrap_angle, create_aligned_path
 from mpc.albert_control import extract_base_state, build_action, set_robot_body_id, angle_difference
 from mpc.mpc_osqp import LinearMPCOSQP, predict_dynamic_obstacles
+from mpc.static_obstacle_to_circles import static_obstacles_to_circles, filter_circles_near_robot, filter_circles_near_robot_capped
 
 from A_star.a_star import *
 
 
 #start world coordinates
-sx = 7.5
-sy = 7.5
+sx = 5
+sy = 5
 
 #goal world coordinates
-gx = 6
-gy = -7.5
+gx = 0
+gy = -3
 
 #Parameters
 robot_radius = 0.3 # robot radius in meters
@@ -43,6 +44,17 @@ def grid_to_world(x_g, y_g, x_min, y_min):
     x = (x_g) * resolution + x_min
     y = (y_g) * resolution + y_min
     return x, y
+
+
+def draw_circle_pybullet(x, y, r, z=0.05, color=[1, 0, 0], life_time=0, N=4):
+    ids = []
+    for i in range(N):
+        th1 = 2*np.pi * i / N
+        th2 = 2*np.pi * (i+1) / N
+        p1 = [x + r*np.cos(th1), y + r*np.sin(th1), z]
+        p2 = [x + r*np.cos(th2), y + r*np.sin(th2), z]
+        ids.append(p.addUserDebugLine(p1, p2, color, lineWidth=1.5, lifeTime=life_time))
+    return ids
 
 #setup and run albert with A* and MPC
 def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0):
@@ -117,6 +129,23 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     for box in box_obstacles:
         env.add_obstacle(box)
     
+    static_circles_all = static_obstacles_to_circles(
+                                                        wall_obstacles,
+                                                        box_obstacles,
+                                                        cylinder_obstacles,
+                                                        robot_radius=robot_radius,
+                                                        margin= 0,
+                                                        sample_radius=0.1
+                                                    )
+
+    static_circle_ids = []
+
+    draw_obstacles = False
+    if draw_obstacles is True:
+        for ox, oy, r in static_circles_all:
+            static_circle_ids += draw_circle_pybullet(ox, oy, r, z=0.05, color=[0,1,0])
+
+
     world_min, world_max = gm.get_world_bounds()
     x_min, y_min, _ = world_min
     x_max, y_max, _ = world_max
@@ -158,8 +187,6 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     show_solution(grid, inflated_grid, rx_w_smooth, ry_w_smooth, rx_w, ry_w)
 
 
-
-
  # Part of Mats ===================================================================== 
     robot_id = 1
     set_robot_body_id(robot_id)
@@ -192,7 +219,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
                     #Decrease when sharp turns, obstacles, more chances per second to correct errors. But increase horizon
     N = 35    #Horizon, amount of steps it looks forward. (basically N * Ts_mpc = seconds looking forward.)
     steps_per_mpc = int(round(Ts_mpc / env.dt))
-    Q_matrix = np.diag([25.0, 25.0, 1.0, 1.0])  # Position and sin/cos tracking
+    Q_matrix = np.diag([20.0, 20.0, 1.0, 1.0])  # Position and sin/cos tracking
     R_matrix = np.diag([20, 20])          # Control effort (v, w)
     P_matrix = np.diag([60.0, 60.0, 15.0, 15.0])  # Terminal cost
     
@@ -244,14 +271,26 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
 
             t_attr = getattr(env, "t", None)
             t_now = t_attr() if callable(t_attr) else t * env.dt
+
+            # static_local = filter_circles_near_robot(static_circles_all, x[0], x[1], r_query=3.0)
+            static_local = filter_circles_near_robot_capped(static_circles_all, x[0], x[1], r_query=3.0, M_MAX=60)
+
+            K = 20
+
+            static_pred = [static_local if k <= K else [] for k in range(N+1)]
+
             if dynamic_obstacle is True:
-                obs_pred = predict_dynamic_obstacles(dynamic_sphere_obstacles, t_now, N, Ts_mpc)
+                dyn_obs_pred = predict_dynamic_obstacles(dynamic_sphere_obstacles, t_now, N, Ts_mpc)
             else:
-                obs_pred = predict_dynamic_obstacles(None, t_now, N, Ts_mpc)
+                dyn_obs_pred = [[] for _ in range(N+1)]
+
             
+            obs_pred = [dyn_obs_pred[k] + static_pred[k] for k in range(N+1)]
 
             u_last, res = mpc.solve(x_mpc, x_ref, u_ref, obs_pred=obs_pred)
     
+        if t % (steps_per_mpc * 50) == 0:
+            print(f"static_local len = {len(static_local)} (should be M_MAX)")
 
         # Apply control
         action = build_action(env.n(), v=u_last[0], w=u_last[1])
