@@ -253,7 +253,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
                 rx_smooth, ry_smooth = rx, ry
             else:
                 rx_rev, ry_rev = rx[::-1], ry[::-1]
-                tck, _ = splprep([rx_rev, ry_rev], s=0.2, k=3)
+                tck, _ = splprep([rx_rev, ry_rev], s=0.15, k=3)
                 u_fine = np.linspace(0, 1, len(rx) * 5)
                 rx_s, ry_s = splev(u_fine, tck)
                 rx_smooth, ry_smooth = rx_s[::-1], ry_s[::-1]
@@ -294,7 +294,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         rrt_obstacles = convert_env_obstacles(wall_obstacles, cylinder_obstacles, box_obstacles, dynamic_sphere_obstacles)
         
         rrt_star = RRTStar(start=[sx, sy], goal=[gx, gy], obstacles=rrt_obstacles, 
-                        rand_area=[-11, 11], robot_radius=0.4, max_iter=3000)
+                        rand_area=[-11, 11], robot_radius=0.5, max_iter=3000)
         
         raw_path_list = rrt_star.planning() # Returns Goal -> Start
 
@@ -319,7 +319,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
                 rx_smooth, ry_smooth = rx, ry
             else:
                 rx_rev, ry_rev = rx[::-1], ry[::-1]
-                tck, _ = splprep([rx_rev, ry_rev], s=0.2, k=3)
+                tck, _ = splprep([rx_rev, ry_rev], s=0.15, k=3)
                 u_fine = np.linspace(0, 1, len(rx) * 5)
                 rx_s, ry_s = splev(u_fine, tck)
                 rx_smooth, ry_smooth = rx_s[::-1], ry_s[::-1]
