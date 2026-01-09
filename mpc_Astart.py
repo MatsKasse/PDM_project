@@ -5,6 +5,7 @@ import A_star.Gridmap as gm
 import gymnasium as gym
 import time
 from tqdm import tqdm
+import csv
 
 from scipy.interpolate import splprep, splev
 
@@ -37,6 +38,7 @@ gy = -3.4
 robot_radius = 0.3 # robot radius in meters
 clearance_weight = 0.5 # weight for clearance in A* cost function
 resolution = 0.09 # grid resolution in meters
+
 
 
 #Convert world coordinates to grid coordinates
@@ -118,6 +120,7 @@ def run_albert(n_steps=1000, render=True, path_type="straight", path_length=3.0)
         ax.grid(True)
         plt.show()
 
+    
     #Smooth path with spline interpolation
     def spline_smooth(rx, ry, smoothing=0.5):
         tck, _ = splprep([rx, ry], s=smoothing)
@@ -126,17 +129,18 @@ def run_albert(n_steps=1000, render=True, path_type="straight", path_length=3.0)
         return x_s, y_s
     
     #Set up obstacles in the environment
+    dynamic_obstacle = not test_planner
+
+    nr_dyn_obst = 0
+    if dynamic_obstacle is True:
+        for dyn_obst in dynamic_sphere_obstacles:
+            env.add_obstacle(dyn_obst)
+            nr_dyn_obst += 1
+
     for wall in wall_obstacles:
         env.add_obstacle(wall)
     for cylinder in cylinder_obstacles:
         env.add_obstacle(cylinder)
-
-    dynamic_obstacle = False#not test_planner
-
-    if dynamic_obstacle is True:
-        for dyn_obst in dynamic_sphere_obstacles:
-            env.add_obstacle(dyn_obst)
-
     for box in box_obstacles:
         env.add_obstacle(box)
     
@@ -162,7 +166,7 @@ def run_albert(n_steps=1000, render=True, path_type="straight", path_length=3.0)
     x_max, y_max, _ = world_max
 
     #Generate gridmap and inflated gridmap
-    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution, robot_radius=robot_radius)
+    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution, robot_radius=robot_radius, nr_dyn_obst=nr_dyn_obst)
 
     #Convert start and goal to grid coordinates
     sx_g, sy_g = world_to_grid(sx, sy, x_min, y_min)    
@@ -192,7 +196,7 @@ def run_albert(n_steps=1000, render=True, path_type="straight", path_length=3.0)
     a_star_time = time.perf_counter() - t0
 
     rx_w, ry_w = zip(*[grid_to_world(x, y, x_min, y_min) for x, y in zip(rx_g, ry_g)])
-
+    path_raw = np.column_stack((rx_w, ry_w)) 
     print(f"A* planning time: {a_star_time*1000:.2f} ms")
     
     
@@ -332,12 +336,17 @@ def run_albert(n_steps=1000, render=True, path_type="straight", path_length=3.0)
         history = None
     
     env.close()
-
-    return {
+    result = {
         "history": history,
         "planned_path": path_xy,
         "a_star_time": a_star_time
+         }
+    world_info = {"grid": grid,
+        "inflated_grid": inflated_grid,
+        "bounds": (x_min, x_max, y_min, y_max)
         }
+
+    return result, world_info 
 
 if __name__ == "__main__":
     show_warnings = False
@@ -350,6 +359,65 @@ if __name__ == "__main__":
         #     path_type="S",  # Options: "straight", "L", "S"
         #     path_length=5.0
         # )
+
+        def show_solutions_res(grid,inflated_grid,paths, sx, sy, gx_list, gy_list, x_min, x_max, y_min, y_max,):
+            """
+            paths: list of paths
+                each path is [[x1, y1], [x2, y2], ...]
+            """
+
+            fig, ax = plt.subplots()
+
+            # Draw grids
+            ax.imshow(
+                grid,
+                cmap='Greys',
+                vmin=0,
+                vmax=1,
+                interpolation="nearest",
+                origin='lower',
+                extent=[x_min, x_max, y_min, y_max]
+            )
+
+            ax.imshow(
+                inflated_grid,
+                cmap='Blues',
+                vmin=0,
+                vmax=1,
+                interpolation="nearest",
+                origin='lower',
+                extent=[x_min, x_max, y_min, y_max],
+                alpha=0.5
+            )
+
+            ax.plot(sx, sy, 'go', markersize=10, label="Start")
+
+            # Automatic color cycle
+            color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+            # Plot paths
+            for i, path in enumerate(paths):
+                
+                path = list(zip(*path))  # ([x...], [y...])
+                x, y = path
+
+                gx_i = gx_list[i]
+                gy_i = gy_list[i]
+
+                color = color_cycle[i % len(color_cycle)]
+                label = f"({gx_i}, {gy_i})" 
+
+                ax.plot(x, y, linewidth=2, color=color, label=label)
+                ax.plot(gx_i, gy_i, 'ro', markersize=8, color=color)
+
+            ax.legend(
+                loc="center left",
+                bbox_to_anchor=(1.02, 0.5),
+                frameon=True
+            )
+            ax.set_title("A* Paths for resolution = 0.09")
+            ax.grid(True)
+            plt.show()
 
         results = []  # store results of multiple runs
 
@@ -389,18 +457,33 @@ if __name__ == "__main__":
                     (2, -3.4)
                     ]
 
-            for i in tqdm(range(5)):  # run multiple trials
-                resolution = round(0.05 + i * 0.01, 2)  # vary resolution from 0.03 to 0.12
+            for i in tqdm(range(2)):  # run multiple trials
+                resolution = round(0.09 + i * 0.01, 2)  # vary resolution from 0.03 to 0.12
                 resolutions.append(resolution)
                 compute_times = []
                 path_lengths = []
+                paths = []
+                gx_list = []
+                gy_list = []
                 for coords in tqdm(destination_positions):
                     gx, gy = coords
                     print('resolution:', resolution, 'goal:', gx, gy)
-                    result = run_albert(n_steps=3000, render=False)
+                    result, world_info = run_albert(n_steps=3000, render=False)
                     path_length = compute_path_length(result["planned_path"])
                     path_lengths.append(path_length)
                     compute_times.append(result["a_star_time"])
+                    
+                    if resolution == 0.09:
+                        paths.append(result["planned_path"])
+                        grid = world_info["grid"]
+                        inflated_grid = world_info["inflated_grid"]
+                        x_min, x_max, y_min, y_max = world_info["bounds"]
+                        gx_list.append(gx)
+                        gy_list.append(gy)
+
+                if resolution == 0.09:
+                    show_solutions_res(grid, inflated_grid, paths, sx, sy, gx_list, gy_list, x_min, x_max, y_min, y_max)
+
                 results.append({
                     "resolution": resolution,
                     "compute_time": compute_times,
@@ -434,3 +517,30 @@ if __name__ == "__main__":
             plt.legend()
             plt.grid(True)
             plt.show()
+
+            np.save('results_dict.npy', results)
+            np.save('paths.npy', paths)
+            print('saved dicts')
+
+            
+
+            with open("results_table.csv", "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["Resolution", "Avg Compute Time [s]", "Avg Path Length [m]"])
+    
+                for result in results:
+                    resolution = result['resolution']
+                    avg_compute_time = sum(result['compute_time']) / len(result['compute_time'])
+                    avg_path_length = sum(result['path_length']) / len(result['path_length'])
+                    writer.writerow([resolution, avg_compute_time, avg_path_length])
+
+            # Print header
+            print(f"{'Resolution':>10} | {'Avg Compute Time [s]':>20} | {'Avg Path Length [m]':>20}")
+            print("-"*55)
+            
+            # Print rows
+            for result in results:
+                resolution = result['resolution']
+                avg_compute_time = sum(result['compute_time']) / len(result['compute_time'])
+                avg_path_length = sum(result['path_length']) / len(result['path_length'])
+                print(f"{resolution:10.2f} | {avg_compute_time:20.4f} | {avg_path_length:20.4f}")

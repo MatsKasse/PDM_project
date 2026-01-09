@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import math
 
 # Generate a 2D gridmap of the environment using ray tests in pybullet
-def generate_gridmap(xmin, xmax, ymin, ymax, resolution=1, robot_radius=0.4, ray_height=5.0, batch_size=100):
+def generate_gridmap(xmin, xmax, ymin, ymax, resolution=1, robot_radius=0.4, ray_height=5.0, nr_dyn_obst=0, batch_size=100):
     w = int((xmax - xmin) / resolution)
     h = int((ymax - ymin) / resolution)
 
@@ -28,7 +28,7 @@ def generate_gridmap(xmin, xmax, ymin, ymax, resolution=1, robot_radius=0.4, ray
     #For each ray test result, mark grid cell as occupied or free (0=free, 1=occupied)
     for k, result in enumerate(results):
         object_id = result[0]
-        hit = object_id > 1 #object_id '0' is the groundplane, object_id '1' is robot, if larger it is an obstacle. Returns -1 if no hit.
+        hit = object_id > 1 + nr_dyn_obst #object_id '0' is the groundplane, object_id '1' is robot, if larger it is an obstacle. Returns -1 if no hit.
         i, j = coords[k]
         grid[i, j] = 1 if hit else 0
 
