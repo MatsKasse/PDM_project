@@ -457,8 +457,8 @@ if __name__ == "__main__":
                     (2, -3.4)
                     ]
 
-            for i in tqdm(range(2)):  # run multiple trials
-                resolution = round(0.09 + i * 0.01, 2)  # vary resolution from 0.03 to 0.12
+            for i in tqdm(range(10)):  # run multiple trials
+                resolution = round(0.03 + i * 0.01, 2)  # vary resolution from 0.03 to 0.12
                 resolutions.append(resolution)
                 compute_times = []
                 path_lengths = []
