@@ -29,12 +29,10 @@ sx = 7.5
 sy = 7.5
 
 #goal world coordinates
-n_runs = 1
-gx = -6.5
-gy = 9
+n_runs = 10
 
-
-point_1 = (gx, gy)
+# point_1 = (-4.5, 0)
+point_1 = (-6.5, 9)
 point_2 = (-2, 8)
 point_3 = (-4, 5)
 point_4 = (-4.5, 0)
@@ -47,16 +45,22 @@ point_10 = (8.5, -5) ##Start is free. Goal is inside an obstacle, please change 
 
 point_list =np.array([point_1, point_2, point_3, point_4, point_5, point_6, point_7, point_8, point_9, point_10])
 
+gx = point_4[0]
+gy = point_4[1]
+
+
+
 
 
 #Parameters
-render = True
+render = False
 dynamic_obstacle = True
+plot_path = False
 robot_radius = 0.3 # robot radius in meters
 clearance_weight = 0.5 # weight for clearance in A* cost function
 resolution = 0.09 # grid resolution in meters
-global_planner = "A_STAR"
-# global_planner = "RRT_STAR"
+# global_planner = "A_STAR"
+global_planner = "RRT_STAR"
 # global_planner = "RRT"
 
 goal_threshold = 0.2  # meters; stop when within this distance of goal
@@ -66,7 +70,10 @@ goal_threshold = 0.2  # meters; stop when within this distance of goal
 # ============================setup and run albert with A* and MPC=====================================
 
 
-def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0, return_metrics=False, dynamic_obstacle = True):
+def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0, return_metrics=False, dynamic_obstacle = True, plot_path=plot_path):
+    
+    
+    
     robots = [
         GenericDiffDriveRobot(
             urdf="albert.urdf",
@@ -102,7 +109,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             env.add_obstacle(dyn_obst)
     
     
-    static_circles_all = static_obstacles_to_circles(wall_obstacles, box_obstacles, cylinder_obstacles, robot_radius=robot_radius, margin= 0.1, sample_radius=0.1)
+    static_circles_all = static_obstacles_to_circles(wall_obstacles, box_obstacles, cylinder_obstacles, 
+                                                     robot_radius=robot_radius, margin= 0.1, sample_radius=0.1, spacing=0.15)
     static_circle_ids = []
 
     draw_obstacles = False #Set True to see the avoided obstacles outlining.
@@ -176,7 +184,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             print("Start is inside an obstacle, please change start position.")
         else:
             print("Start is free.")
-        if inflated_grid[gx_g, gy_g] == 1:
+        if inflated_grid[gy_g, gx_g] == 1:
             print("Goal is inside an obstacle, please change goal position.")
         else:
             print("Goal is free.")
@@ -196,7 +204,9 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
 
         distance = get_distance(rx_w, ry_w)
         print('distance = ',distance)
-        show_solution(grid, inflated_grid, rx_w_smooth, ry_w_smooth, rx_w, ry_w)
+        
+        if plot_path == True:
+            show_solution(grid, inflated_grid, rx_w_smooth, ry_w_smooth, rx_w, ry_w)
 
 
 # ================= RRT ======================================================================
@@ -245,25 +255,26 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         path_xy = np.column_stack((rx_smooth, ry_smooth))
 
         # Visualization
-        plt.figure(figsize=(6,6))
-        for obs in rrt_obstacles:
-            if obs['type'] == 'rect': 
-                plt.gca().add_patch(patches.Rectangle((obs['x'], obs['y']), obs['w'], obs['h'], color='gray'))
-            elif obs['type'] == 'circle': 
-                plt.gca().add_patch(patches.Circle((obs['x'], obs['y']), obs['r'], color='gray'))
-        
-        for node in rrt.node_list:
-            if node.parent:
-                plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-g", alpha=0.3, linewidth=0.5)
+        if plot_path == True:
+            plt.figure(figsize=(6,6))
+            for obs in rrt_obstacles:
+                if obs['type'] == 'rect': 
+                    plt.gca().add_patch(patches.Rectangle((obs['x'], obs['y']), obs['w'], obs['h'], color='gray'))
+                elif obs['type'] == 'circle': 
+                    plt.gca().add_patch(patches.Circle((obs['x'], obs['y']), obs['r'], color='gray'))
+            
+            for node in rrt.node_list:
+                if node.parent:
+                    plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-g", alpha=0.3, linewidth=0.5)
 
-        plt.plot(rx, ry, "k--", label="Raw RRT")
-        plt.plot(rx_smooth, ry_smooth, "r-", linewidth=2, label="Smoothed")
-        plt.plot(sx, sy, "go", label="Start")
-        plt.plot(gx, gy, "ro", label="Goal")
-        plt.legend()
-        plt.title("Standard RRT Path Planning")
-        plt.grid(True)
-        plt.show()
+            plt.plot(rx, ry, "k--", label="Raw RRT")
+            plt.plot(rx_smooth, ry_smooth, "r-", linewidth=2, label="Smoothed")
+            plt.plot(sx, sy, "go", label="Start")
+            plt.plot(gx, gy, "ro", label="Goal")
+            plt.legend()
+            plt.title("Standard RRT Path Planning")
+            plt.grid(True)
+            plt.show()
         
 
 # ================= RRT_STAR ======================================================================
@@ -317,19 +328,22 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             elif obs['type'] == 'circle': 
                 plt.gca().add_patch(patches.Circle((obs['x'], obs['y']), obs['r'], color='gray'))
         
-        for node in rrt_star.node_list:
-            if node.parent:
-                plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-g", alpha=0.1, linewidth=0.5)
+        
+        
+        if plot_path == True:
+            for node in rrt_star.node_list:
+                if node.parent:
+                    plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-g", alpha=0.1, linewidth=0.5)
 
-        plt.plot(rx, ry, "k--", label="Raw RRT*")
-        plt.plot(rx_smooth, ry_smooth, "r-", linewidth=2, label="Smoothed")
-        plt.plot(sx, sy, "go", label="Start")
-        plt.plot(gx, gy, "ro", label="Goal")
-        plt.legend()
-        plt.title("RRT* Path Planning")
-        plt.show(block=False)
-        plt.pause(5)
-        plt.close()
+            plt.plot(rx, ry, "k--", label="Raw RRT*")
+            plt.plot(rx_smooth, ry_smooth, "r-", linewidth=2, label="Smoothed")
+            plt.plot(sx, sy, "go", label="Start")
+            plt.plot(gx, gy, "ro", label="Goal")
+            plt.legend()
+            plt.title("RRT* Path Planning")
+            plt.show(block=False)
+            plt.pause(5)
+            plt.close()
 
 
 # Part of Mats ===================================================================== 
@@ -348,7 +362,9 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     ref = PolylineReference(path, ds=0.1, v_ref=1.2)   #ds is the resampling interval. Smaller means dense waypoints, more noice
                                                         # Larger ds means fewer reference updates, smoother. But cutting corners.
                                                         #
-    path_ids = draw_polyline(ref.path, z=0.1, line_width=6.0, life_time=0) # Draw path
+    if plot_path == True:
+        path_ids = draw_polyline(ref.path, z=0.1, line_width=6.0, life_time=0) # Draw path
+    
     goal_pos = (gx,gy)
     
     
@@ -386,16 +402,6 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     def state_to_sincos(x_state):
         return np.array([x_state[0], x_state[1], np.sin(x_state[2]), np.cos(x_state[2])], dtype=float)
 
-    def min_obs_clearance(pos_xy, obs_pred):
-        if not obs_pred:
-            return None
-        min_clear = None
-        for step in obs_pred:
-            for ox, oy, r_safe in step:
-                clear = np.hypot(pos_xy[0] - ox, pos_xy[1] - oy) - r_safe
-                if min_clear is None or clear < min_clear:
-                    min_clear = clear
-        return min_clear
 
     for t in range(n_steps): #basically for all t in simulation
         x = extract_base_state() #Extract pose
@@ -459,7 +465,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     sim_time_s = steps_taken * env.dt
     wall_time_s = time.perf_counter() - wall_start
     
-    clear_debug_items(path_ids)
+    if plot_path == True:
+        clear_debug_items(path_ids)
     env.close()
     
     if return_metrics:
