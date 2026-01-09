@@ -132,7 +132,7 @@ cylinder_obstacles_dicts = [
         "movable": False,
         "geometry": {
             "position": [8.0, -8.0, 0.0],
-            "radius": 0.75,
+            "radius": 1.0,
             "height": 1.0,
         },
         "rgba": [0.1, 1.0, 0.3, 1.0],
@@ -145,7 +145,7 @@ cylinder_obstacles_dicts = [
         "movable": False,
         "geometry": {
             "position": [4.0, -8.0, 0.0],
-            "radius": 0.75,
+            "radius": 1.0,
             "height": 1.0,
         },
         "rgba": [0.1, 1.0, 0.3, 1.0],
@@ -157,7 +157,7 @@ cylinder_obstacles_dicts = [
         "movable": False,
         "geometry": {
             "position": [0.0, -8.0, 0.0],
-            "radius": 0.75,
+            "radius": 1.0,
             "height": 1.0,
         },
         "rgba": [0.1, 1.0, 0.3, 1.0],
@@ -170,7 +170,7 @@ cylinder_obstacles_dicts = [
         "movable": False,
         "geometry": {
             "position": [-4.0, -8.0, 0.0],
-            "radius": 0.75,
+            "radius": 1.0,
             "height": 1.0,
         },
         "rgba": [0.1, 1.0, 0.3, 1.0],
@@ -183,7 +183,7 @@ cylinder_obstacles_dicts = [
         "movable": False,
         "geometry": {
             "position": [-8.0, -8.0, 0.0],
-            "radius": 0.75,
+            "radius": 1.0,
             "height": 1.0,
         },
         "rgba": [0.1, 1.0, 0.3, 1.0],
@@ -196,7 +196,7 @@ cylinder_obstacles_dicts = [
         "movable": False,
         "geometry": {
             "position": [6.0, -5.0, 0.0],
-            "radius": 0.75,
+            "radius": 1.0,
             "height": 1.0,
         },
         "rgba": [0.1, 1.0, 0.3, 1.0],
@@ -209,7 +209,7 @@ cylinder_obstacles_dicts = [
         "movable": False,
         "geometry": {
             "position": [2.0, -5.0, 0.0],
-            "radius": 0.75,
+            "radius": 1.0,
             "height": 1.0,
         },
         "rgba": [0.1, 1.0, 0.3, 1.0],
@@ -222,7 +222,7 @@ cylinder_obstacles_dicts = [
         "movable": False,
         "geometry": {
             "position": [-2.0, -5.0, 0.0],
-            "radius": 0.75,
+            "radius": 1.0,
             "height": 1.0,
         },
         "rgba": [0.1, 1.0, 0.3, 1.0],
@@ -235,7 +235,7 @@ cylinder_obstacles_dicts = [
         "movable": False,
         "geometry": {
             "position": [-6.0, -5.0, 0.0],
-            "radius": 0.75,
+            "radius": 1.0,
             "height": 1.0,
         },
         "rgba": [0.1, 1.0, 0.3, 1.0],
@@ -247,7 +247,7 @@ cylinder_obstacles_dicts = [
         "movable": False,
         "geometry": {
             "position": [0.0, 8.0, 0.0],
-            "radius": 0.75,
+            "radius": 1.0,
             "height": 1.0,
         },
         "rgba": [0.1, 1.0, 0.3, 1.0],
@@ -260,7 +260,7 @@ cylinder_obstacles_dicts = [
         "movable": False,
         "geometry": {
             "position": [-4.0, 8.0, 0.0],
-            "radius": 0.75,
+            "radius": 1.0,
             "height": 1.0,
         },
         "rgba": [0.1, 1.0, 0.3, 1.0],
@@ -273,7 +273,7 @@ cylinder_obstacles_dicts = [
         "movable": False,
         "geometry": {
             "position": [-8.0, 8.0, 0.0],
-            "radius": 0.75,
+            "radius": 1.0,
             "height": 1.0,
         },
         "rgba": [0.1, 1.0, 0.3, 1.0],
@@ -286,7 +286,7 @@ cylinder_obstacles_dicts = [
         "movable": False,
         "geometry": {
             "position": [-2.0, 5.0, 0.0],
-            "radius": 0.75,
+            "radius": 1.0,
             "height": 1.0,
         },
         "rgba": [0.1, 1.0, 0.3, 1.0],
@@ -299,7 +299,7 @@ cylinder_obstacles_dicts = [
         "movable": False,
         "geometry": {
             "position": [-6.0, 5.0, 0.0],
-            "radius": 0.75,
+            "radius": 1.0,
             "height": 1.0,
         },
         "rgba": [0.1, 1.0, 0.3, 1.0],
@@ -317,9 +317,9 @@ box_obstacles_dicts = [
     'movable': False,
     'geometry': {
         'position' : [7.0, 0.0, 0.0],
-        'width': 3.0,
+        'width': 4.0,
         'height': 1.0,
-        'length': 2.0,
+        'length': 3.0,
     },
     "rgba": [0.1, 1.0, 0.5, 1.0],
 },
@@ -330,7 +330,7 @@ box_obstacles_dicts = [
     'movable': False,
     'geometry': {
         'position' : [2.5, 0.0, 0.0],
-        'width': 3.0,
+        'width': 4.0,
         'height': 1.0,
         'length': 2.0,
     },
@@ -343,7 +343,7 @@ box_obstacles_dicts = [
     'movable': False,
     'geometry': {
         'position' : [-2.5, 0.0, 0.0],
-        'width': 3.0,
+        'width': 4.0,
         'height': 1.0,
         'length': 2.0,
     },
@@ -356,9 +356,9 @@ box_obstacles_dicts = [
     'movable': False,
     'geometry': {
         'position' : [-7.0, 0.0, 0.0],
-        'width': 3.0,
+        'width': 4.0,
         'height': 1.0,
-        'length': 2.0,
+        'length': 3.0,
     },
     "rgba": [0.1, 1.0, 0.5, 1.0],
 }

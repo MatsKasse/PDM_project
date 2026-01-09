@@ -4,6 +4,7 @@ import numpy as np
 import pybullet as p
 import gymnasium as gym
 import matplotlib.patches as patches
+import pandas as pd
 
 from scipy.interpolate import splprep, splev
 
@@ -31,24 +32,32 @@ sy = 7.5
 #goal world coordinates
 n_runs = 10
 
-# point_1 = (-4.5, 0)
-point_1 = (-6.5, 9)
-point_2 = (-2, 8)
-point_3 = (-4, 5)
-point_4 = (-4.5, 0)
-point_5 = (-8.25, -5) ##Start is free. Goal is inside an obstacle, please change goal position.
-point_6 = (0, 0)
-point_7 = (-6.25, -8)
-point_8 = (2.25, -8)
-point_9 = (9.25, 1) ##Start is free. Goal is inside an obstacle, please change goal position.
-point_10 = (8.5, -5) ##Start is free. Goal is inside an obstacle, please change goal position.
-
-point_list =np.array([point_1, point_2, point_3, point_4, point_5, point_6, point_7, point_8, point_9, point_10])
-
-gx = point_4[0]
-gy = point_4[1]
+# point_1 = (9.5, 1)
+# # point_1 = (-6.5, 9)
+# point_2 = (-2, 8)
+# point_3 = (-4, 5)
+# point_4 = (-4.5, 0)
+# point_5 = (-8.25, -5) ##Start is free. Goal is inside an obstacle, please change goal position.
+# point_6 = (0, 0)
+# point_7 = (-6.25, -8)
+# point_8 = (2.25, -8)
+# point_9 = (9.25, 1) ##Start is free. Goal is inside an obstacle, please change goal position.
+# point_10 = (8.5, -5) ##Start is free. Goal is inside an obstacle, please change goal position.
 
 
+# point_list =np.array([point_1, point_2, point_3, point_4, point_5, point_6, point_7, point_8, point_9, point_10])
+point_list = np.array([	(-8, -9.5),
+	(-5.5, 8), 
+	(9, 1),
+	(2.5, -8),
+	(-4, 0),
+	(0, 9.8),
+	(4, -9.5),
+	(-4.4, -5),
+	(9.8, -8),
+	(2, -3.5)
+	]
+)
 
 
 
@@ -63,7 +72,7 @@ resolution = 0.09 # grid resolution in meters
 global_planner = "RRT_STAR"
 # global_planner = "RRT"
 
-goal_threshold = 0.2  # meters; stop when within this distance of goal
+goal_threshold = 0.25  # meters; stop when within this distance of goal
 
 
 
@@ -216,7 +225,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         print("\n Generating Standard RRT Path (0.4m Radius)...")
     
 
-        rrt_obstacles = convert_env_obstacles(wall_obstacles, cylinder_obstacles, dynamic_sphere_obstacles)
+        rrt_obstacles = convert_env_obstacles(wall_obstacles, cylinder_obstacles, box_obstacles, dynamic_sphere_obstacles)
         
         rrt = RRT(start=[sx, sy], goal=[gx, gy], obstacles=rrt_obstacles, 
                 rand_area=[-11, 11], robot_radius=0.4, max_iter=3000)
@@ -282,7 +291,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     if global_planner == "RRT_STAR":
         print("\n Generating RRT* Path (0.4m Radius)...")
         
-        rrt_obstacles = convert_env_obstacles(wall_obstacles, cylinder_obstacles, dynamic_sphere_obstacles)
+        rrt_obstacles = convert_env_obstacles(wall_obstacles, cylinder_obstacles, box_obstacles, dynamic_sphere_obstacles)
         
         rrt_star = RRTStar(start=[sx, sy], goal=[gx, gy], obstacles=rrt_obstacles, 
                         rand_area=[-11, 11], robot_radius=0.4, max_iter=3000)
@@ -341,10 +350,9 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             plt.plot(gx, gy, "ro", label="Goal")
             plt.legend()
             plt.title("RRT* Path Planning")
-            plt.show(block=False)
-            plt.pause(5)
-            plt.close()
-
+            plt.grid(True)
+            plt.show()
+            
 
 # Part of Mats ===================================================================== 
     robot_id = 1
@@ -492,18 +500,39 @@ if __name__ == "__main__":
 
         for i in range(n_runs):  # run multiple trials
             gx, gy = point_list[i]
-            history, metrics = run_albert(n_steps=3000, render=render, return_metrics=True, dynamic_obstacle=dynamic_obstacle)
+            history, metrics = run_albert(n_steps=1000, render=render, return_metrics=True, dynamic_obstacle=dynamic_obstacle)
+
             results.append({"history": history, "metrics": metrics})
+
             successes += int(metrics["success"])
-            line = ([
-                f"Run {i + 1}/{n_runs}: success={metrics['success']}, "
-                f"sim_time={metrics['sim_time_s']:.2f}s, wall_time={metrics['wall_time_s']:.2f}s, "
-                f"steps={metrics['steps']}, final_dist={metrics['final_dist']:.3f}"
-            ])
-            run_summaries.append(line)
-            print(line)
+            run_summaries.append({
+                                    "run": i+1,
+                                    "success": metrics["success"],
+                                    "sim_time_s": metrics["sim_time_s"],
+                                    "wall_time_s": metrics["wall_time_s"],
+                                    "steps": metrics["steps"],
+                                    "final_dist": metrics["final_dist"],
+                                    "goal_x": gx,
+                                    "goal_y": gy,
+                                })
+
 
 
         success_rate = successes / n_runs if n_runs else 0.0
         print(run_summaries)
         print(f"\nSuccess rate: {successes}/{n_runs} = {success_rate:.2%}")
+
+        # Convert run_summaries to DataFrame (tabelstructuur)
+        df = pd.DataFrame(run_summaries)
+
+        # Opslaan als Excel (mooier voor analyse)
+        # df.to_excel("mpc_results.xlsx", index=False)
+
+        # # Optioneel ook als CSV (lichtgewicht, voor scripts)
+        df.to_csv("mpc_results.csv", index=False)
+
+        print("\nSaved results to mpc_results.xlsx and mpc_results.csv")
+
+        import subprocess, os
+        csv_path = os.path.abspath("mpc_results.csv")
+        subprocess.run(["xdg-open", csv_path])

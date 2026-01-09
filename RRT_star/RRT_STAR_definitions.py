@@ -165,7 +165,7 @@ class RRTStar:
             curr = curr.parent
         return path 
 
-def convert_env_obstacles(wall_obs, cyl_obs, dyn_obs):
+def convert_env_obstacles(wall_obs, cyl_obs, box_obs, dyn_obs):
     """
     Converts environment obstacles to RRT format.
     Specifically extracts initial (t=0) position for dynamic obstacles.
@@ -183,8 +183,22 @@ def convert_env_obstacles(wall_obs, cyl_obs, dyn_obs):
         h = geo.get('width', geo.get('height', 1.0))
         rrt_obs.append({'type': 'rect', 'x': pos[0]-w/2, 'y': pos[1]-h/2, 'w': w, 'h': h})
         
-    # 2. Cylinders & Dynamic Spheres (Both treated as circles)
-    for item in cyl_obs + dyn_obs:
+    # 2. Boxes (BoxObstacles)
+    for item in box_obs or []:
+        if hasattr(item, '_content_dict'): geo = item._content_dict['geometry']
+        elif hasattr(item, 'content_dict'): geo = item.content_dict['geometry']
+        else: continue
+
+        pos = geo.get('position')
+        if pos is None:
+            continue
+        w = geo.get('length', geo.get('width', 1.0))
+        h = geo.get('width', geo.get('height', 1.0))
+        rrt_obs.append({'type': 'rect', 'x': pos[0]-w/2, 'y': pos[1]-h/2, 'w': w, 'h': h})
+
+    # 3. Cylinders & Dynamic Spheres (Both treated as circles)
+    # for item in cyl_obs + (dyn_obs or []):
+    for item in cyl_obs:
         if hasattr(item, '_content_dict'): content = item._content_dict
         elif hasattr(item, 'content_dict'): content = item.content_dict
         else: continue
