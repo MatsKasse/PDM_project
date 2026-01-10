@@ -4,8 +4,6 @@ import random
 from my_obstacles import *
 from RRT_star.RRT_STAR_definitions import is_line_collision_free, is_point_in_obstacle
 
-
-
 class RRTNode:
     def __init__(self, x, y):
         self.x = x
@@ -13,8 +11,8 @@ class RRTNode:
         self.parent = None
 
 class RRT:
-    def __init__(self, start, goal, obstacles, rand_area, robot_radius=0.4, 
-                 expand_dis=1.5, goal_sample_rate=5, max_iter=3000):
+    def __init__(self, start, goal, obstacles, rand_area, robot_radius=0.3, 
+                 expand_dis=0.05, goal_sample_rate=5, max_iter=20000):
         self.start = RRTNode(start[0], start[1])
         self.goal = RRTNode(goal[0], goal[1])
         self.obstacles = obstacles
@@ -25,7 +23,12 @@ class RRT:
         self.max_iter = max_iter
         self.node_list = []
 
-    def planning(self):
+    def planning(self, pruning=True):
+        """
+        Main RRT planning loop.
+        :param pruning: If True, applies greedy pruning to the final path.
+        :return: Final path list [[x,y], ...] (Goal -> Start)
+        """
         self.node_list = [self.start]
         for i in range(self.max_iter):
             # 1. Sampling
@@ -59,7 +62,11 @@ class RRT:
                     final_node.parent = new_node
                     
                     if is_line_collision_free(new_node.x, new_node.y, final_node.x, final_node.y, self.obstacles, self.robot_radius):
-                        return self.get_path_goal_to_start(final_node)
+                        raw_path = self.get_path_goal_to_start(final_node)
+                        
+                        if pruning:
+                            return self.simplify_path(raw_path)
+                        return raw_path
         
         return None
 
@@ -69,5 +76,34 @@ class RRT:
         while curr is not None:
             path.append([curr.x, curr.y])
             curr = curr.parent
-        return path 
+        return path
 
+    def simplify_path(self, path):
+        """
+        Greedy Pruning: removes unnecessary waypoints if a straight line exists.
+        Expects path in Goal -> Start order (as returned by get_path_goal_to_start).
+        """
+        if len(path) < 3: return path
+        
+        # Convert Goal->Start to Start->Goal for logic
+        path = path[::-1] 
+        simplified = [path[0]]
+        current_idx = 0
+        
+        while current_idx < len(path) - 1:
+            for i in range(len(path) - 1, current_idx, -1):
+                start_pt = path[current_idx]
+                end_pt = path[i]
+                
+                # Check if we can skip directly to node 'i'
+                if is_line_collision_free(start_pt[0], start_pt[1], end_pt[0], end_pt[1], self.obstacles, self.robot_radius):
+                    simplified.append(end_pt)
+                    current_idx = i
+                    break
+            else:
+                # Fallback step
+                current_idx += 1
+                simplified.append(path[current_idx])
+        
+        # Return as Goal -> Start to match RRT convention
+        return simplified[::-1]

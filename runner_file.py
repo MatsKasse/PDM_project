@@ -62,15 +62,15 @@ point_list = np.array([	(-8, -9.5),
 
 
 #Parameters
-render = False
+render = True
 dynamic_obstacle = True
-plot_path = False
-robot_radius = 0.3 # robot radius in meters
+plot_path = True
+robot_radius = 0.4 # robot radius in meters
 clearance_weight = 0.5 # weight for clearance in A* cost function
 resolution = 0.09 # grid resolution in meters
 # global_planner = "A_STAR"
 global_planner = "RRT_STAR"
-# global_planner = "RRT"
+#global_planner = "RRT"
 
 goal_threshold = 0.25  # meters; stop when within this distance of goal
 
@@ -228,7 +228,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         rrt_obstacles = convert_env_obstacles(wall_obstacles, cylinder_obstacles, box_obstacles, dynamic_sphere_obstacles)
         
         rrt = RRT(start=[sx, sy], goal=[gx, gy], obstacles=rrt_obstacles, 
-                rand_area=[-11, 11], robot_radius=0.4, max_iter=3000)
+                rand_area=[-11, 11], robot_radius=0.4, max_iter=25000)
         
         raw_path_list = rrt.planning() # Returns Goal -> Start
 
@@ -244,22 +244,27 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
                 }
             return []
 
-        # Spline Smoothing
+        # Extract X and Y for plotting/smoothing
         rx = [p[0] for p in raw_path_list]
         ry = [p[1] for p in raw_path_list]
         
-        try:
-            if len(rx) < 4:
-                rx_smooth, ry_smooth = rx, ry
-            else:
-                rx_rev, ry_rev = rx[::-1], ry[::-1]
-                tck, _ = splprep([rx_rev, ry_rev], s=0.15, k=3)
-                u_fine = np.linspace(0, 1, len(rx) * 5)
-                rx_s, ry_s = splev(u_fine, tck)
-                rx_smooth, ry_smooth = rx_s[::-1], ry_s[::-1]
-        except Exception as e:
-            print(f"Spline error: {e}. Using raw path.")
-            rx_smooth, ry_smooth = rx, ry
+        # --- SPLINE SMOOTHING SECTION (COMMENTED OUT) ---
+        # try:
+        #     if len(rx) < 4:
+        #         rx_smooth, ry_smooth = rx, ry
+        #     else:
+        #         rx_rev, ry_rev = rx[::-1], ry[::-1]
+        #         tck, _ = splprep([rx_rev, ry_rev], s=0.15, k=3)
+        #         u_fine = np.linspace(0, 1, len(rx) * 5)
+        #         rx_s, ry_s = splev(u_fine, tck)
+        #         rx_smooth, ry_smooth = rx_s[::-1], ry_s[::-1]
+        # except Exception as e:
+        #     print(f"Spline error: {e}. Using raw path.")
+        #     rx_smooth, ry_smooth = rx, ry
+        
+        # Fallback: Just use the raw path if smoothing is off
+        rx_smooth, ry_smooth = rx, ry
+        # -----------------------------------------------
 
         path_xy = np.column_stack((rx_smooth, ry_smooth))
 
@@ -277,6 +282,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
                     plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-g", alpha=0.3, linewidth=0.5)
 
             plt.plot(rx, ry, "k--", label="Raw RRT")
+            # This line will now just plot the raw path in red since rx_smooth = rx
             plt.plot(rx_smooth, ry_smooth, "r-", linewidth=2, label="Smoothed")
             plt.plot(sx, sy, "go", label="Start")
             plt.plot(gx, gy, "ro", label="Goal")
@@ -293,8 +299,9 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         
         rrt_obstacles = convert_env_obstacles(wall_obstacles, cylinder_obstacles, box_obstacles, dynamic_sphere_obstacles)
         
+        # Initialize RRT*
         rrt_star = RRTStar(start=[sx, sy], goal=[gx, gy], obstacles=rrt_obstacles, 
-                        rand_area=[-11, 11], robot_radius=0.5, max_iter=3000)
+                           rand_area=[-11, 11], robot_radius=0.4, max_iter=1500)
         
         raw_path_list = rrt_star.planning() # Returns Goal -> Start
 
@@ -310,46 +317,54 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
                 }
             return []
 
-        # Spline Smoothing
+        
+        
+        # Use RAW path instead
         rx = [p[0] for p in raw_path_list]
         ry = [p[1] for p in raw_path_list]
+        # --------------------------------------
+
+        # --- SPLINE SMOOTHING (COMMENTED OUT) ---
+        # try:
+        #     if len(rx) < 4:
+        #         rx_smooth, ry_smooth = rx, ry
+        #     else:
+        #         rx_rev, ry_rev = rx[::-1], ry[::-1]
+        #         tck, _ = splprep([rx_rev, ry_rev], s=0.15, k=3)
+        #         u_fine = np.linspace(0, 1, len(rx) * 5)
+        #         rx_s, ry_s = splev(u_fine, tck)
+        #         rx_smooth, ry_smooth = rx_s[::-1], ry_s[::-1]
+        # except Exception as e:
+        #     print(f"Spline error: {e}. Using raw path.")
+        #     rx_smooth, ry_smooth = rx, ry
         
-        try:
-            if len(rx) < 4:
-                rx_smooth, ry_smooth = rx, ry
-            else:
-                rx_rev, ry_rev = rx[::-1], ry[::-1]
-                tck, _ = splprep([rx_rev, ry_rev], s=0.15, k=3)
-                u_fine = np.linspace(0, 1, len(rx) * 5)
-                rx_s, ry_s = splev(u_fine, tck)
-                rx_smooth, ry_smooth = rx_s[::-1], ry_s[::-1]
-        except Exception as e:
-            print(f"Spline error: {e}. Using raw path.")
-            rx_smooth, ry_smooth = rx, ry
+        # Fallback: Just use the raw path
+        rx_smooth, ry_smooth = rx, ry
+        # ----------------------------------------
 
         path_xy = np.column_stack((rx_smooth, ry_smooth))
 
         # Visualization
-        plt.figure(figsize=(6,6))
-        for obs in rrt_obstacles:
-            if obs['type'] == 'rect': 
-                plt.gca().add_patch(patches.Rectangle((obs['x'], obs['y']), obs['w'], obs['h'], color='gray'))
-            elif obs['type'] == 'circle': 
-                plt.gca().add_patch(patches.Circle((obs['x'], obs['y']), obs['r'], color='gray'))
-        
-        
-        
         if plot_path == True:
+            plt.figure(figsize=(6,6))
+            for obs in rrt_obstacles:
+                if obs['type'] == 'rect': 
+                    plt.gca().add_patch(patches.Rectangle((obs['x'], obs['y']), obs['w'], obs['h'], color='gray'))
+                elif obs['type'] == 'circle': 
+                    plt.gca().add_patch(patches.Circle((obs['x'], obs['y']), obs['r'], color='gray'))
+            
+            # Plot Tree
             for node in rrt_star.node_list:
                 if node.parent:
                     plt.plot([node.x, node.parent.x], [node.y, node.parent.y], "-g", alpha=0.1, linewidth=0.5)
 
-            plt.plot(rx, ry, "k--", label="Raw RRT*")
-            plt.plot(rx_smooth, ry_smooth, "r-", linewidth=2, label="Smoothed")
+            # Plot Final Path (Red line is the raw output)
+            plt.plot(rx, ry, "r-", linewidth=2, label="Raw RRT* Path")
+            
             plt.plot(sx, sy, "go", label="Start")
             plt.plot(gx, gy, "ro", label="Goal")
             plt.legend()
-            plt.title("RRT* Path Planning")
+            plt.title("RRT* Path Planning (Raw)")
             plt.grid(True)
             plt.show()
             
