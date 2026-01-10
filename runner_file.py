@@ -1,5 +1,6 @@
 import warnings
 import time
+import re
 from datetime import datetime
 import numpy as np
 import pybullet as p
@@ -49,14 +50,14 @@ sy = 7.5
 point_list = np.array([	
     # (-8, -9.5),
 	# (-5.5, 8), 
-	(9.6, 3),
-    (-6.25, -8),
-	(2.5, -8),
+	# (9.6, 3),
+    # (-6.25, -8),
+	# (2.5, -8),
 	(-4, 0),
-	(0, 9.8),
-	(4, -9.5),
-	(-4.4, -5),
-	(9.5, -8),
+	# (0, 9.8),
+	# (4, -9.5),
+	# (-4.4, -5),
+	# (9.5, -8),
 	(2, -3.4)
 	]
 )
@@ -130,6 +131,9 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     if dynamic_obstacle is True:
         for dyn_obst in dynamic_sphere_obstacles:
             env.add_obstacle(dyn_obst)
+    obstacle_type_by_id = {}
+    for obst_id, obst in env.get_obstacles().items():
+        obstacle_type_by_id[obst_id] = "dynamic" if obst in dynamic_sphere_obstacles else "static"
     
     
     static_circles_all = static_obstacles_to_circles(wall_obstacles, box_obstacles, cylinder_obstacles, 
@@ -221,7 +225,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         
         
         #Smooth the path
-        rx_w_smooth, ry_w_smooth = spline_smooth(rx_w, ry_w, 0.0)
+        rx_w_smooth, ry_w_smooth = spline_smooth(rx_w, ry_w, 0)
         path_xy = np.column_stack((rx_w_smooth, ry_w_smooth)) 
 
 
@@ -436,6 +440,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     history = []
     steps_taken = 0
     reached_goal = False
+    collision_label = "none"
+    collision_id = None
     def state_to_sincos(x_state):
         return np.array([x_state[0], x_state[1], np.sin(x_state[2]), np.cos(x_state[2])], dtype=float)
 
@@ -479,7 +485,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             obs_pred = [dyn_obs_pred[k] + static_pred[k] for k in range(N+1)]
 
             u_last, res = mpc.solve(x_mpc, x_ref, u_ref, obs_pred=obs_pred)
-            print(dist_to_goal )
+            # print(dist_to_goal )
         if t % (steps_per_mpc * 50) == 0:
             print(f"static_local len = {len(static_local)} (should be M_MAX)")
 
@@ -491,7 +497,26 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         history.append((x.copy(), u_last.copy(), ob))  #useful information: True state, controll inputs, observations from simulation.
         
         if terminated:
-            print(f"\n Terminated {t}, Collided with an obstacle")
+            collision_msg = info.get("Collision") if isinstance(info, dict) else None
+            if collision_msg:
+                collision_type = "unknown"
+                match = re.search(r"id\s+(\d+)", collision_msg)
+                if match:
+                    collision_id = int(match.group(1))
+                    collision_type = obstacle_type_by_id.get(collision_id, "unknown")
+                if collision_type == "dynamic":
+                    obstacle_label = "moving"
+                elif collision_type == "static":
+                    obstacle_label = "static"
+                else:
+                    obstacle_label = "unknown"
+                collision_label = obstacle_label
+                if collision_id is not None:
+                    print(f"\n Terminated {t}, Collided with a {obstacle_label} obstacle (id={collision_id})")
+                else:
+                    print(f"\n Terminated {t}, Collided with a {obstacle_label} obstacle")
+            else:
+                print(f"\n Terminated {t}")
             break
             
         if truncated:
@@ -517,6 +542,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             "wall_time_s": wall_time_s,
             "steps": steps_taken,
             "final_dist": float(dist_to_goal),
+            "collision_type": collision_label,
+            "collision_id": collision_id,
         }
     return history
 
@@ -531,7 +558,7 @@ if __name__ == "__main__":
         successes = 0
         n_runs = n_runs
 
-        for r in range(1):
+        for r in range(10):
             for i in range(n_runs):  # run multiple trials
                 print(f"\n Run number: {i+1}")
                 gx, gy = point_list[i]
@@ -545,11 +572,13 @@ if __name__ == "__main__":
                                         "success": metrics["success"],
                                         "sim_time_s": metrics["sim_time_s"],
                                         "wall_time_s": metrics["wall_time_s"],
-                                        "steps": metrics["steps"],
-                                        "final_dist": metrics["final_dist"],
-                                        "goal_x": gx,
-                                        "goal_y": gy,
-                                    })
+                                    "steps": metrics["steps"],
+                                    "final_dist": metrics["final_dist"],
+                                    "goal_x": gx,
+                                    "goal_y": gy,
+                                    "collision_type": metrics.get("collision_type"),
+                                    "collision_id": metrics.get("collision_id"),
+                                })
 
 
 
