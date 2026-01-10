@@ -7,7 +7,7 @@ from mpscenes.obstacles.cylinder_obstacle import CylinderObstacle
 import os
 
 
-wall_length = 20
+wall_length = 21
 wall_thickness=0.1
 wall_obstacles_dicts = [
     {
@@ -87,7 +87,7 @@ wall_obstacles_dicts = [
     {
         'type': 'box', 
          'geometry': {
-             'position': [6.5, 4.0, 0.4], 'width': wall_thickness, 'height': 0.8, 'length': 7.0
+             'position': [8, 4.0, 0.4], 'width': wall_thickness, 'height': 5, 'length': 5.0
         },
         'high': {
             'position' : [6.5, 4.0, 0.4],
@@ -105,7 +105,7 @@ wall_obstacles_dicts = [
     {
         'type': 'box', 
          'geometry': {
-             'position': [2.0, 8.0, 0.4], 'width': 4.0, 'height': 0.8, 'length': wall_thickness
+             'position': [2.0, 8.5, 0.4], 'width': 4.0, 'height': 5, 'length': wall_thickness
         },
         'high': {
             'position' : [2.0, 8.0, 0.4],
@@ -365,3 +365,48 @@ box_obstacles_dicts = [
 ]
 
 box_obstacles = [BoxObstacle(name=f"box_{i}", content_dict=obst_dict) for i, obst_dict in enumerate(box_obstacles_dicts)]
+
+
+dynamic_sphere_obstacles_dicts = [
+    # {
+    #     "type": "sphere",
+    #     "geometry": {"trajectory": ["4.0 - 0.2 * t", "2.0", "0.2"], "radius": 0.35},
+    #     "rgba": [1.0, 0.2, 0.2, 1.0],
+    # },
+    # {
+    #     "type": "sphere",
+    #     "geometry": {"trajectory": ["-2.0", "-2.0 + 0.05 * t", "0.2"], "radius": 0.35},
+    #     "rgba": [1.0, 0.6, 0.1, 1.0],
+    # },
+    # {
+    #     "type": "sphere",
+    #     "geometry": {"trajectory": ["0.0 + 0.2 * t", "2.0", "0.2"], "radius": 0.35},
+    #     "rgba": [1.0, 0.2, 0.2, 1.0],
+    # },
+    # {
+    #     "type": "sphere",
+    #     "geometry": {"trajectory": ["0.0 + 0.1 * t", "3.0", "0.2"], "radius": 0.35},
+    #     "rgba": [1.0, 0.2, 0.2, 1.0],
+    # },
+    {
+        "type": "sphere",
+        "geometry": {"trajectory": ["0.0 + 0.5 * t", "3.0", "0.2"], "radius": 0.35},
+        "rgba": [1.0, 0.2, 0.2, 1.0],
+    },
+    {
+        "type": "sphere",
+        "geometry": {"trajectory": ["0.0+0.1*t", "0.0 + 0.2*t", "0.2"], "radius": 0.35},
+        "rgba": [1.0, 0.2, 0.2, 1.0],
+    },
+    {
+        "type": "sphere",
+        "geometry": {"trajectory": ["-0.8", "0.0 + 0.4*t", "0.2"], "radius": 0.35},
+        "rgba": [1.0, 0.2, 0.2, 1.0],
+    },
+
+]
+
+dynamic_sphere_obstacles = [
+    DynamicSphereObstacle(name=f"dyn_sphere_{i}", content_dict=obst_dict)
+    for i, obst_dict in enumerate(dynamic_sphere_obstacles_dicts)
+]

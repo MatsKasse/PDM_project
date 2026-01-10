@@ -215,8 +215,8 @@ def main():
         obstacles=obstacles,
         rand_area=[-11, 11],
         robot_radius=ROBOT_RADIUS, # <--- Pass Radius Here
-        expand_dis=2,
-        max_iter=2000
+        expand_dis=0.05,
+        max_iter=25000
     )
 
     print(f"Running RRT with Robot Radius: {ROBOT_RADIUS}m ...")
