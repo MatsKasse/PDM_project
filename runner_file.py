@@ -30,7 +30,6 @@ sx = 7.5
 sy = 7.5
 
 #goal world coordinates
-n_runs = 10
 
 # point_1 = (9.5, 1)
 # # point_1 = (-6.5, 9)
@@ -46,32 +45,45 @@ n_runs = 10
 
 
 # point_list =np.array([point_1, point_2, point_3, point_4, point_5, point_6, point_7, point_8, point_9, point_10])
-point_list = np.array([	(-8, -9.5),
+point_list = np.array([	
+    (-8, -9.5),
 	(-5.5, 8), 
-	(9, 1),
+	(9.2, 0),
 	(2.5, -8),
 	(-4, 0),
 	(0, 9.8),
 	(4, -9.5),
 	(-4.4, -5),
 	(9.8, -8),
-	(2, -3.5)
+	(2, -3.4)
 	]
 )
 
 
 
-#Parameters
-render = False
+#Parameters simulation
+render = True
 dynamic_obstacle = True
-plot_path = False
+plot_path = True
 robot_radius = 0.3 # robot radius in meters
-clearance_weight = 0.5 # weight for clearance in A* cost function
-resolution = 0.09 # grid resolution in meters
-# global_planner = "A_STAR"
-global_planner = "RRT_STAR"
-# global_planner = "RRT"
+n_runs = 10
 
+
+#Parameters Global planners
+clearance_weight = 0.5 # weight for clearance in A* cost function
+resolution = 0.06 # grid resolution in meters
+max_iter = 1500
+step_size_RRT = 0.05
+step_size_RRT_star = 0.75
+max_rew_radius = 1.5
+
+
+# global_planner = "A_STAR"
+# global_planner = "RRT_STAR"
+global_planner = "RRT"
+
+
+#Parameters Local Planner
 goal_threshold = 0.25  # meters; stop when within this distance of goal
 
 
@@ -228,7 +240,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         rrt_obstacles = convert_env_obstacles(wall_obstacles, cylinder_obstacles, box_obstacles, dynamic_sphere_obstacles)
         
         rrt = RRT(start=[sx, sy], goal=[gx, gy], obstacles=rrt_obstacles, 
-                rand_area=[-11, 11], robot_radius=0.4, max_iter=3000)
+                rand_area=[-11, 11], robot_radius=robot_radius, expand_dis= step_size_RRT, max_iter=10000)
         
         raw_path_list = rrt.planning() # Returns Goal -> Start
 
@@ -294,7 +306,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         rrt_obstacles = convert_env_obstacles(wall_obstacles, cylinder_obstacles, box_obstacles, dynamic_sphere_obstacles)
         
         rrt_star = RRTStar(start=[sx, sy], goal=[gx, gy], obstacles=rrt_obstacles, 
-                        rand_area=[-11, 11], robot_radius=0.5, max_iter=3000)
+                        rand_area=[-11, 11], robot_radius=robot_radius, expand_dis= step_size_RRT_star, max_iter= max_iter)
         
         raw_path_list = rrt_star.planning() # Returns Goal -> Start
 
