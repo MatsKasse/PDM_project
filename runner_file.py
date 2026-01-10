@@ -1,5 +1,6 @@
 import warnings
 import time
+from datetime import datetime
 import numpy as np
 import pybullet as p
 import gymnasium as gym
@@ -46,15 +47,16 @@ sy = 7.5
 
 # point_list =np.array([point_1, point_2, point_3, point_4, point_5, point_6, point_7, point_8, point_9, point_10])
 point_list = np.array([	
-    (-8, -9.5),
-	(-5.5, 8), 
-	(9.2, 0),
+    # (-8, -9.5),
+	# (-5.5, 8), 
+	(9.6, 3),
+    (-6.25, -8),
 	(2.5, -8),
 	(-4, 0),
 	(0, 9.8),
 	(4, -9.5),
 	(-4.4, -5),
-	(9.8, -8),
+	(9.5, -8),
 	(2, -3.4)
 	]
 )
@@ -62,10 +64,10 @@ point_list = np.array([
 
 
 #Parameters simulation
-render = False
+render = True
 dynamic_obstacle = True
 plot_path = True
-robot_radius = 0.3 # robot radius in meters
+robot_radius = 0.4 # robot radius in meters
 n_runs = 10
 
 
@@ -78,9 +80,9 @@ step_size_RRT_star = 0.75
 max_rew_radius = 1.5
 
 
-# global_planner = "A_STAR"
-global_planner = "RRT_STAR"
-#global_planner = "RRT"
+global_planner = "A_STAR"
+# global_planner = "RRT_STAR"
+# global_planner = "RRT"
 
 
 #Parameters Local Planner
@@ -131,14 +133,14 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     
     
     static_circles_all = static_obstacles_to_circles(wall_obstacles, box_obstacles, cylinder_obstacles, 
-                                                     robot_radius=robot_radius, margin= 0.1, sample_radius=0.1, spacing=0.15)
+                                                     robot_radius=robot_radius, margin= 0.1, sample_radius=0.25, spacing=0.15)
     static_circle_ids = []
 
     draw_obstacles = False #Set True to see the avoided obstacles outlining.
 
     if draw_obstacles is True:
         for ox, oy, r in static_circles_all:
-            static_circle_ids += draw_circle_pybullet(ox, oy, r, z=0.05, color=[0,1,0])
+            static_circle_ids += draw_circle_pybullet(ox, oy, r, z=0.05, color=[0,1,0], N=6)
 
 
 
@@ -219,7 +221,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         
         
         #Smooth the path
-        rx_w_smooth, ry_w_smooth = spline_smooth(rx_w, ry_w, 0.1)
+        rx_w_smooth, ry_w_smooth = spline_smooth(rx_w, ry_w, 0.0)
         path_xy = np.column_stack((rx_w_smooth, ry_w_smooth)) 
 
 
@@ -477,7 +479,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             obs_pred = [dyn_obs_pred[k] + static_pred[k] for k in range(N+1)]
 
             u_last, res = mpc.solve(x_mpc, x_ref, u_ref, obs_pred=obs_pred)
-    
+            print(dist_to_goal )
         if t % (steps_per_mpc * 50) == 0:
             print(f"static_local len = {len(static_local)} (should be M_MAX)")
 
@@ -529,42 +531,45 @@ if __name__ == "__main__":
         successes = 0
         n_runs = n_runs
 
-        for i in range(n_runs):  # run multiple trials
-            print(f"\n Run number: {i+1}")
-            gx, gy = point_list[i]
-            history, metrics = run_albert(n_steps=1000, render=render, return_metrics=True, dynamic_obstacle=dynamic_obstacle)
+        for r in range(1):
+            for i in range(n_runs):  # run multiple trials
+                print(f"\n Run number: {i+1}")
+                gx, gy = point_list[i]
+                history, metrics = run_albert(n_steps=1000, render=render, return_metrics=True, dynamic_obstacle=dynamic_obstacle)
 
-            results.append({"history": history, "metrics": metrics})
+                results.append({"history": history, "metrics": metrics})
 
-            successes += int(metrics["success"])
-            run_summaries.append({
-                                    "run": i+1,
-                                    "success": metrics["success"],
-                                    "sim_time_s": metrics["sim_time_s"],
-                                    "wall_time_s": metrics["wall_time_s"],
-                                    "steps": metrics["steps"],
-                                    "final_dist": metrics["final_dist"],
-                                    "goal_x": gx,
-                                    "goal_y": gy,
-                                })
+                successes += int(metrics["success"])
+                run_summaries.append({
+                                        "run": i+1,
+                                        "success": metrics["success"],
+                                        "sim_time_s": metrics["sim_time_s"],
+                                        "wall_time_s": metrics["wall_time_s"],
+                                        "steps": metrics["steps"],
+                                        "final_dist": metrics["final_dist"],
+                                        "goal_x": gx,
+                                        "goal_y": gy,
+                                    })
 
 
 
-        success_rate = successes / n_runs if n_runs else 0.0
-        print(run_summaries)
-        print(f"\nSuccess rate: {successes}/{n_runs} = {success_rate:.2%}")
+            success_rate = successes / n_runs if n_runs else 0.0
+            print(run_summaries)
+            print(f"\nSuccess rate: {successes}/{n_runs} = {success_rate:.2%}")
 
-        # Convert run_summaries to DataFrame (tabelstructuur)
-        df = pd.DataFrame(run_summaries)
+            # Convert run_summaries to DataFrame (tabelstructuur)
+            df = pd.DataFrame(run_summaries)
 
-        # Opslaan als Excel (mooier voor analyse)
-        # df.to_excel("mpc_results.xlsx", index=False)
+            # Opslaan als Excel (mooier voor analyse)
+            # df.to_excel("mpc_results.xlsx", index=False)
 
-        # # Optioneel ook als CSV (lichtgewicht, voor scripts)
-        df.to_csv("mpc_results.csv", index=False)
+            # # Optioneel ook als CSV (lichtgewicht, voor scripts)
+            timestamp = datetime.now().strftime("%d-%m-%y_%H-%M")
+            csv_name = f"MPC_{global_planner}_results_{timestamp}.csv"
+            df.to_csv(csv_name, index=False)
 
-        print("\nSaved results to mpc_results.xlsx and mpc_results.csv")
+            print(f"\nSaved results to {csv_name}")
 
-        import subprocess, os
-        csv_path = os.path.abspath("mpc_results.csv")
-        subprocess.run(["xdg-open", csv_path])
+            import subprocess, os
+            csv_path = os.path.abspath(csv_name)
+            subprocess.run(["xdg-open", csv_path])

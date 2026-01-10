@@ -45,7 +45,8 @@ def static_obstacles_to_circles(walls, boxes, cylinders,
     
 
         poly = _box_to_polygon(float(cx), float(cy), w, l)
-        inflated = poly.buffer(robot_radius + margin)
+        inflate = 0.2
+        inflated = poly.buffer(inflate)
 
         boundary = inflated.exterior
         L = boundary.length
@@ -105,6 +106,5 @@ def filter_circles_near_robot_capped(static_circles, x, y, r_query=3.0, M_MAX=80
         out.append((1e6, 1e6, 0.1))
 
     return out
-
 
 
