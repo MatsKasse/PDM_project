@@ -225,7 +225,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         
         
         #Smooth the path
-        rx_w_smooth, ry_w_smooth = spline_smooth(rx_w, ry_w, 0)
+        rx_w_smooth, ry_w_smooth = spline_smooth(rx_w, ry_w, 0.1)
         path_xy = np.column_stack((rx_w_smooth, ry_w_smooth)) 
 
 
