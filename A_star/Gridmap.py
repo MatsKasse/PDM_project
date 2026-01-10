@@ -28,7 +28,15 @@ def generate_gridmap(xmin, xmax, ymin, ymax, resolution=1, robot_radius=0.4, ray
     #For each ray test result, mark grid cell as occupied or free (0=free, 1=occupied)
     for k, result in enumerate(results):
         object_id = result[0]
-        hit = object_id > 1 #object_id '0' is the groundplane, object_id '1' is robot, if larger it is an obstacle. Returns -1 if no hit.
+        hit = False
+        if object_id > 1:
+            # Only count static, non-sphere bodies as obstacles in the gridmap.
+            # Dynamic obstacles in this project are spheres, so we ignore spheres here.
+            mass = p.getDynamicsInfo(object_id, -1)[0]
+            if mass == 0:
+                shape_data = p.getCollisionShapeData(object_id, -1)
+                is_sphere = any(sd[2] == p.GEOM_SPHERE for sd in shape_data)
+                hit = not is_sphere
         i, j = coords[k]
         grid[i, j] = 1 if hit else 0
 

@@ -62,7 +62,7 @@ point_list = np.array([
 
 
 #Parameters simulation
-render = True
+render = False
 dynamic_obstacle = True
 plot_path = True
 robot_radius = 0.3 # robot radius in meters
@@ -79,8 +79,8 @@ max_rew_radius = 1.5
 
 
 # global_planner = "A_STAR"
-# global_planner = "RRT_STAR"
-global_planner = "RRT"
+global_planner = "RRT_STAR"
+# global_planner = "RRT"
 
 
 #Parameters Local Planner
@@ -240,7 +240,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         rrt_obstacles = convert_env_obstacles(wall_obstacles, cylinder_obstacles, box_obstacles, dynamic_sphere_obstacles)
         
         rrt = RRT(start=[sx, sy], goal=[gx, gy], obstacles=rrt_obstacles, 
-                rand_area=[-11, 11], robot_radius=robot_radius, expand_dis= step_size_RRT, max_iter=10000)
+                rand_area=[-11, 11], robot_radius=0.4, expand_dis= step_size_RRT, max_iter=10000)
         
         raw_path_list = rrt.planning() # Returns Goal -> Start
 
@@ -306,7 +306,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         rrt_obstacles = convert_env_obstacles(wall_obstacles, cylinder_obstacles, box_obstacles, dynamic_sphere_obstacles)
         
         rrt_star = RRTStar(start=[sx, sy], goal=[gx, gy], obstacles=rrt_obstacles, 
-                        rand_area=[-11, 11], robot_radius=robot_radius, expand_dis= step_size_RRT_star, max_iter= max_iter)
+                        rand_area=[-11, 11], robot_radius=0.4, expand_dis= step_size_RRT_star, max_iter= max_iter)
         
         raw_path_list = rrt_star.planning() # Returns Goal -> Start
 
@@ -473,8 +473,12 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         
         history.append((x.copy(), u_last.copy(), ob))  #useful information: True state, controll inputs, observations from simulation.
         
-        if terminated or truncated:
-            print(f"\n Terminated or Truncated at step {t}, see if collided or reached goal")
+        if terminated:
+            print(f"\n Terminated {t}, Collided with an obstacle")
+            break
+            
+        if truncated:
+            print(f"\n Terminated {t}, Can't find a solution for MPC")
             # print(info)
             break
 
@@ -511,6 +515,7 @@ if __name__ == "__main__":
         n_runs = n_runs
 
         for i in range(n_runs):  # run multiple trials
+            print(f"\n Run number: {i+1}")
             gx, gy = point_list[i]
             history, metrics = run_albert(n_steps=1000, render=render, return_metrics=True, dynamic_obstacle=dynamic_obstacle)
 
