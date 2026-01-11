@@ -48,15 +48,15 @@ sy = 7.5
 
 # point_list =np.array([point_1, point_2, point_3, point_4, point_5, point_6, point_7, point_8, point_9, point_10])
 point_list = np.array([	
-    # (-8, -9.5),
-	# (-5.5, 8), 
-	# (9.6, 3),
-    # (-6.25, -8),
-	# (2.5, -8),
+    (-8, -9.5),
+	(-5.5, 8), 
+	(9.6, 3),
+    (-6.25, -8),
+	(2.5, -8),
 	(-4, 0),
-	# (0, 9.8),
-	# (4, -9.5),
-	# (-4.4, -5),
+	(0, 9.8),
+	(4, -9.5),
+	(-4.4, -5),
 	# (9.5, -8),
 	(2, -3.4)
 	]
@@ -65,9 +65,9 @@ point_list = np.array([
 
 
 #Parameters simulation
-render = True
+render = False
 dynamic_obstacle = True
-plot_path = True
+plot_path = False
 robot_radius = 0.4 # robot radius in meters
 n_runs = 10
 
@@ -81,9 +81,9 @@ step_size_RRT_star = 0.75
 max_rew_radius = 1.5
 
 
-global_planner = "A_STAR"
+# global_planner = "A_STAR"
 # global_planner = "RRT_STAR"
-# global_planner = "RRT"
+global_planner = "RRT"
 
 
 #Parameters Local Planner
@@ -258,6 +258,10 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
                     "success": False,
                     "sim_time_s": 0.0,
                     "wall_time_s": time.perf_counter() - wall_start,
+                    "steps": 0,
+                    "final_dist": float("nan"),
+                    "collision_type": "none",
+                    "collision_id": None,
                     "reason": "rrt_failed",
                 }
             return []
@@ -331,6 +335,10 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
                     "success": False,
                     "sim_time_s": 0.0,
                     "wall_time_s": time.perf_counter() - wall_start,
+                    "steps": 0,
+                    "final_dist": float("nan"),
+                    "collision_type": "none",
+                    "collision_id": None,
                     "reason": "rrt_star_failed",
                 }
             return []
@@ -558,10 +566,12 @@ if __name__ == "__main__":
         successes = 0
         n_runs = n_runs
 
-        for r in range(10):
-            for i in range(n_runs):  # run multiple trials
-                print(f"\n Run number: {i+1}")
-                gx, gy = point_list[i]
+        
+        for i in range(n_runs):  # run multiple trials
+            print(f"\n Run number: {i+1}")
+            gx, gy = point_list[i]
+
+            for r in range(10):
                 history, metrics = run_albert(n_steps=1000, render=render, return_metrics=True, dynamic_obstacle=dynamic_obstacle)
 
                 results.append({"history": history, "metrics": metrics})
@@ -578,27 +588,28 @@ if __name__ == "__main__":
                                     "goal_y": gy,
                                     "collision_type": metrics.get("collision_type"),
                                     "collision_id": metrics.get("collision_id"),
+                                    "reason": metrics.get("reason"),
                                 })
 
 
 
-            success_rate = successes / n_runs if n_runs else 0.0
-            print(run_summaries)
-            print(f"\nSuccess rate: {successes}/{n_runs} = {success_rate:.2%}")
+        success_rate = successes / n_runs if n_runs else 0.0
+        print(run_summaries)
+        print(f"\nSuccess rate: {successes}/{n_runs} = {success_rate:.2%}")
 
-            # Convert run_summaries to DataFrame (tabelstructuur)
-            df = pd.DataFrame(run_summaries)
+        # Convert run_summaries to DataFrame (tabelstructuur)
+        df = pd.DataFrame(run_summaries)
 
-            # Opslaan als Excel (mooier voor analyse)
-            # df.to_excel("mpc_results.xlsx", index=False)
+        # Opslaan als Excel (mooier voor analyse)
+        # df.to_excel("mpc_results.xlsx", index=False)
 
-            # # Optioneel ook als CSV (lichtgewicht, voor scripts)
-            timestamp = datetime.now().strftime("%d-%m-%y_%H-%M")
-            csv_name = f"MPC_{global_planner}_results_{timestamp}.csv"
-            df.to_csv(csv_name, index=False)
+        # # Optioneel ook als CSV (lichtgewicht, voor scripts)
+        timestamp = datetime.now().strftime("%d-%m-%y_%H-%M")
+        csv_name = f"MPC_{global_planner}_results_{timestamp}.csv"
+        df.to_csv(csv_name, index=False)
 
-            print(f"\nSaved results to {csv_name}")
+        print(f"\nSaved results to {csv_name}")
 
-            import subprocess, os
-            csv_path = os.path.abspath(csv_name)
-            subprocess.run(["xdg-open", csv_path])
+        import subprocess, os
+        csv_path = os.path.abspath(csv_name)
+        subprocess.run(["xdg-open", csv_path])
