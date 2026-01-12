@@ -48,11 +48,11 @@ sy = 7.5
 
 # point_list =np.array([point_1, point_2, point_3, point_4, point_5, point_6, point_7, point_8, point_9, point_10])
 point_list = np.array([	
-    (-8, -9.5),
-	(-5.5, 8), 
-	(9.6, 3),
-    (-6.25, -8),
-	(2.5, -8),
+    # (-8, -9.5),
+	# (-5.5, 8), 
+	# (9.6, 3),
+    # (-6.25, -8),
+	# (2.5, -8),
 	(-4, 0),
 	(0, 9.8),
 	(4, -9.5),
@@ -65,11 +65,11 @@ point_list = np.array([
 
 
 #Parameters simulation
-render = False
+render = True
 dynamic_obstacle = True
-plot_path = False
+plot_path = True
 robot_radius = 0.4 # robot radius in meters
-n_runs = 10
+n_runs = 1
 
 
 #Parameters Global planners
@@ -81,9 +81,9 @@ step_size_RRT_star = 0.75
 max_rew_radius = 1.5
 
 
-# global_planner = "A_STAR"
+global_planner = "A_STAR"
 # global_planner = "RRT_STAR"
-global_planner = "RRT"
+# global_planner = "RRT"
 
 
 #Parameters Local Planner
@@ -246,7 +246,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         rrt_obstacles = convert_env_obstacles(wall_obstacles, cylinder_obstacles, box_obstacles, dynamic_sphere_obstacles)
         
         rrt = RRT(start=[sx, sy], goal=[gx, gy], obstacles=rrt_obstacles, 
-                rand_area=[-11, 11], robot_radius=0.4, expand_dis= step_size_RRT, max_iter=10000)
+                rand_area=[-11, 11], robot_radius=0.4, expand_dis= step_size_RRT, max_iter=100000)
         
         raw_path_list = rrt.planning() # Returns Goal -> Start
 
@@ -323,7 +323,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         
         # Initialize RRT*
         rrt_star = RRTStar(start=[sx, sy], goal=[gx, gy], obstacles=rrt_obstacles, 
-                        rand_area=[-11, 11], robot_radius=0.4, expand_dis= step_size_RRT_star, max_iter= max_iter)
+                        rand_area=[-11, 11], robot_radius=0.4, expand_dis= step_size_RRT_star, max_iter= 2* max_iter)
         
         raw_path_list = rrt_star.planning() # Returns Goal -> Start
 
