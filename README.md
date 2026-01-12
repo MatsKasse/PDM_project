@@ -30,6 +30,19 @@ The system was developed within the TU Delft MSc Robotics PDM project and follow
 - Automatic logging and export of metrics
 
 ---
+## 🤖 Use of Generative AI
+
+The majority of the algorithms, software architecture, and experimental pipeline in this repository were designed and implemented by the project team.
+
+During development, **generative AI tools (including large language models)** were used as an engineering assistant to support:
+- Code prototyping and refactoring  
+- Mathematical formulation of MPC and constraints  
+- Debugging and performance optimization  
+- Documentation and report writing  
+
+All generated content was **reviewed, validated, and adapted by the authors**, and final design decisions, implementations, and experimental conclusions remain the responsibility of the project team.
+
+This approach reflects modern engineering practice, where generative AI is used as a productivity and ideation tool rather than a replacement for human expertise.
 
 ## 🗂 Repository Structure
 
