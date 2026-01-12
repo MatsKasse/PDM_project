@@ -59,36 +59,33 @@ Installed automatically:
 
 ## 🚀 Installation & Setup
 
-### 1. Clone the repository
+### 1. Clone the repository and Run
 ```bash
-git clone https://github.com/yourname/yourrepo.git
-cd yourrepo
+git clone https://github.com/yourname/yourrepo.git](https://github.com/MatsKasse/PDM_project.git
 
-mpc:
-  horizon: 20
-  dt: 0.1
-  max_velocity: 1.0
-  safety_radius: 0.4
-  Q_pos: 5.0
-  Q_theta: 1.0
-  R_v: 0.2
-  R_w: 0.1
+cd PDM_project
 
-planner:
-  type: RRT
-  max_nodes: 1000
+python runner_file.py
+```
+## ⚙️ Configuration and Tuning
 
-experiment:
-  runs_per_goal: 10
-  number_of_goals: 10
-  max_time: 60
+All experiment settings are centrally controlled via `runner_file.py`.  
+Within this file you can configure:
 
+- The selected **global planner** (RRT, RRT*, A*) and its **parameters**
+- **MPC parameters** (horizon, weights, velocity limits, safety radius)
+- **Simulation parameters** (number of runs, renders, dynamic obstacles)
 
+The file contains inline comments explaining each parameter, making it straightforward to modify the behavior of the planners, controller, and simulation with minimal changes in the core of the code.
 
 ---
 
-Als je wilt kan ik hierna ook:
-- een **GitHub-ready badge header** toevoegen  
-- of een **academisch paper-style README** maken  
-- of een **bedrijfsvriendelijke versie voor Qafka** 💼
+## 👤 Authors
+  
+- Mats Kasse; m.kasse@student.tudelft.nl
+- Bram Kalkman; bakalkman@student.tudelft.nl
+- Lars Emmer; lemmer@student.tudelft.nl
+- Jesper van der Meulen; jespermeulen@student.tudelft.nl
+
+For questions regarding the implementation, experiments, or results, please contact the authors.
 
