@@ -16,7 +16,7 @@ The system combines:
 - **Physics-based simulation (PyBullet)**
 
 The framework is designed for **quantitative benchmarking** of different global planners under identical local control and environment conditions.
-The system was developed within the TU Delft MSc Robotics PDM project and follows engineering practices that are compatible with real-world deployment.
+The system was developed within the TU Delft MSc Robotics PDM project.
 
 ---
 
@@ -30,19 +30,14 @@ The system was developed within the TU Delft MSc Robotics PDM project and follow
 - Automatic logging and export of metrics
 
 ---
-## 🤖 Use of Generative AI
+## 🤖 In-House Development and Use of Generative AI
 
-The majority of the algorithms, software architecture, and experimental pipeline in this repository were designed and implemented by the project team.
+The majority of the algorithms, software architecture, and experimental pipeline in this repository were **designed and implemented by the project team**, rather than relying on off-the-shelf navigation or control stacks.  
+While established scientific libraries (e.g., NumPy, SciPy, OSQP, PyBullet) are used for numerical computation, optimization, and simulation, the **core planning logic, MPC formulation, constraint handling, and evaluation framework were developed in-house**. For the implementation of the A* algorithm, the PythonRobotics Toolbox was used. This was altered to accommodate an index grid-map instead of coordinates and to take into account the distance-to-obstacle cost.
 
-During development, **generative AI tools (including large language models)** were used as an engineering assistant to support:
-- Code prototyping and refactoring  
-- Mathematical formulation of MPC and constraints  
-- Debugging and performance optimization  
-- Documentation and report writing  
+During development, **generative AI tools** were used as an engineering assistant to support.
+All generated content was **reviewed, validated, and adapted by the authors**.
 
-All generated content was **reviewed, validated, and adapted by the authors**, and final design decisions, implementations, and experimental conclusions remain the responsibility of the project team.
-
-This approach reflects modern engineering practice, where generative AI is used as a productivity and ideation tool rather than a replacement for human expertise.
 
 ## 🗂 Repository Structure
 
@@ -58,7 +53,6 @@ The **entire pipeline** is controlled via `runner_file.py`, which executes globa
 - Git
 
 ### Core Python dependencies
-Installed automatically:
 - NumPy  
 - SciPy  
 - OSQP  
@@ -66,7 +60,8 @@ Installed automatically:
 - Gymnasium  
 - Shapely  
 - Pandas  
-- Matplotlib  
+- Matplotlib
+- PythonRobotics Toolbox   
 
 ---
 
