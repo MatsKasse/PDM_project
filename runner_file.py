@@ -24,62 +24,50 @@ from A_star.a_star import *
 from A_star.Gridmap import *
 
 from RRT_star.RRT_STAR_definitions import *
-from RRT_definitions import *
+from RRT.RRT_definitions import *
 
 
 #start world coordinates
-sx = 7.5
+sx = 7.5                    
 sy = 7.5
-
-#goal world coordinates
-
-# point_1 = (9.5, 1)
-# # point_1 = (-6.5, 9)
-# point_2 = (-2, 8)
-# point_3 = (-4, 5)
-# point_4 = (-4.5, 0)
-# point_5 = (-8.25, -5) ##Start is free. Goal is inside an obstacle, please change goal position.
-# point_6 = (0, 0)
-# point_7 = (-6.25, -8)
-# point_8 = (2.25, -8)
-# point_9 = (9.25, 1) ##Start is free. Goal is inside an obstacle, please change goal position.
-# point_10 = (8.5, -5) ##Start is free. Goal is inside an obstacle, please change goal position.
 
 
 # point_list =np.array([point_1, point_2, point_3, point_4, point_5, point_6, point_7, point_8, point_9, point_10])
 point_list = np.array([	
-    # (-8, -9.5),
-	# (-5.5, 8), 
-	# (9.6, 3),
-    # (-6.25, -8),
-	# (2.5, -8),
+    (-8, -9.5),
+	(-5.5, 8), 
+	(9.6, 3),
+    (-6.25, -8),
+	(2.5, -8),
 	(-4, 0),
 	(0, 9.8),
 	(4, -9.5),
 	(-4.4, -5),
-	# (9.5, -8),
+	(9.5, -8),
 	(2, -3.4)
-	]
-)
+	])
 
 
 
 #Parameters simulation
-render = True
-dynamic_obstacle = True
-plot_path = True
-robot_radius = 0.4 # robot radius in meters
-n_runs = 1
+render = False               #Set True to see the render of the simulation
+dynamic_obstacle = True     #Set True to activate dynamic obstacles in the map
+plot_path = True            #Set True to see the planned path in a plot
+draw_obstacles = False       #Set True to see the avoided obstacles outlining.
+
+robot_radius = 0.4          # robot radius in meters for A*
+n_runs = 1                  #Amount of simulations with different coordinates (max = len(point_list))
 
 
 #Parameters Global planners
-clearance_weight = 0.5 # weight for clearance in A* cost function
-resolution = 0.06 # grid resolution in meters
-max_iter = 1500
+clearance_weight = 0.5      # weight for clearance in A* cost function
+resolution = 0.06           # grid resolution in meters
+max_iter = 1500             #Amount of iterations for RRT_star
 step_size_RRT = 0.05
 step_size_RRT_star = 0.75
 max_rew_radius = 1.5
 
+#Choose global Planner --> activate by uncommenting and commenting
 
 global_planner = "A_STAR"
 # global_planner = "RRT_STAR"
@@ -91,10 +79,10 @@ goal_threshold = 0.25  # meters; stop when within this distance of goal
 
 
 
-# ============================setup and run albert with A* and MPC=====================================
+# ============================setup and run albert with Global Planner and and MPC=====================================
 
 
-def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0, return_metrics=False, dynamic_obstacle = True, plot_path=plot_path):
+def run_albert(n_steps=1000, render=False, return_metrics=False, dynamic_obstacle = True, plot_path=plot_path, draw_obstacles=draw_obstacles):
     
     
     
@@ -140,7 +128,6 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
                                                      robot_radius=robot_radius, margin= 0.1, sample_radius=0.25, spacing=0.15)
     static_circle_ids = []
 
-    draw_obstacles = False #Set True to see the avoided obstacles outlining.
 
     if draw_obstacles is True:
         for ox, oy, r in static_circles_all:
@@ -395,7 +382,7 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
             plt.show()
             
 
-# Part of Mats ===================================================================== 
+# MPC prerequisites===================================================================== 
     robot_id = 1
     set_robot_body_id(robot_id)
     
@@ -406,32 +393,26 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
     print(f"Initial state: pos=({x0[0]:.3f}, {x0[1]:.3f}), theta={np.degrees(x0[2]):.1f}°")
 
     # Create path aligned with robot's actual heading
-    # path = create_aligned_path(x0[0], x0[1], x0[2], path_type, path_length)
     path = path_xy[::-1]
-    ref = PolylineReference(path, ds=0.1, v_ref=1.2)   #ds is the resampling interval. Smaller means dense waypoints, more noice
-                                                        # Larger ds means fewer reference updates, smoother. But cutting corners.
-                                                        #
+    ref = PolylineReference(path, ds=0.1, v_ref=1.2)   #ds is the resampling interval.                                                
+                                                        
     if plot_path == True:
         path_ids = draw_polyline(ref.path, z=0.1, line_width=6.0, life_time=0) # Draw path
     
     goal_pos = (gx,gy)
     
-    
-
     dx = path[1,0] - path[0,0]
     dy = path[1,1] - path[0,1]
     theta_tangent = np.arctan2(dy, dx)
     
-
-
     # MPC setup
-    Ts_mpc = 0.08 #sample period between control decisions made by the MPC. Increase for slower reaction time, lower computation, faster robot.
-                    #Decrease when sharp turns, obstacles, more chances per second to correct errors. But increase horizon
-    N = 35    #Horizon, amount of steps it looks forward. (basically N * Ts_mpc = seconds looking forward.)
+    Ts_mpc = 0.08                                   #sample period between control decisions made by the MPC. Increase for slower reaction time, lower computation, faster robot.
+                                                    #Decrease when sharp turns, obstacles, more chances per second to correct errors. But increase horizon
+    N = 35                                          #Horizon, amount of steps it looks forward. (basically N * Ts_mpc = seconds looking forward.)
     steps_per_mpc = int(round(Ts_mpc / env.dt))
-    Q_matrix = np.diag([20.0, 20.0, 1.0, 1.0])  # Position and sin/cos tracking
-    R_matrix = np.diag([20, 20])          # Control effort (v, w)
-    P_matrix = np.diag([60, 60, 15, 15])  # Terminal cost
+    Q_matrix = np.diag([20.0, 20.0, 1.0, 1.0])      # Position and sin/cos tracking
+    R_matrix = np.diag([20, 20])                    # Control effort (v, w)
+    P_matrix = np.diag([60, 60, 15, 15])            # Terminal cost
     
     mpc = LinearMPCOSQP(
         Ts= Ts_mpc, 
@@ -454,8 +435,8 @@ def run_albert(n_steps=1000, render=False, path_type="straight", path_length=3.0
         return np.array([x_state[0], x_state[1], np.sin(x_state[2]), np.cos(x_state[2])], dtype=float)
 
 
-    for t in range(n_steps): #basically for all t in simulation
-        x = extract_base_state() #Extract pose
+    for t in range(n_steps):        #basically for all t in simulation
+        x = extract_base_state()    #Extract pose
         x_mpc = state_to_sincos(x)
 
         dist_to_goal = np.linalg.norm([x[0] - goal_pos[0], x[1] - goal_pos[1]])
@@ -571,25 +552,25 @@ if __name__ == "__main__":
             print(f"\n Run number: {i+1}")
             gx, gy = point_list[i]
 
-            for r in range(10):
-                history, metrics = run_albert(n_steps=1000, render=render, return_metrics=True, dynamic_obstacle=dynamic_obstacle)
+            
+            history, metrics = run_albert(n_steps=1000, render=render, return_metrics=True, dynamic_obstacle=dynamic_obstacle)
 
-                results.append({"history": history, "metrics": metrics})
+            results.append({"history": history, "metrics": metrics})
 
-                successes += int(metrics["success"])
-                run_summaries.append({
-                                        "run": i+1,
-                                        "success": metrics["success"],
-                                        "sim_time_s": metrics["sim_time_s"],
-                                        "wall_time_s": metrics["wall_time_s"],
-                                    "steps": metrics["steps"],
-                                    "final_dist": metrics["final_dist"],
-                                    "goal_x": gx,
-                                    "goal_y": gy,
-                                    "collision_type": metrics.get("collision_type"),
-                                    "collision_id": metrics.get("collision_id"),
-                                    "reason": metrics.get("reason"),
-                                })
+            successes += int(metrics["success"])
+            run_summaries.append({
+                                    "run": i+1,
+                                    "success": metrics["success"],
+                                    "sim_time_s": metrics["sim_time_s"],
+                                    "wall_time_s": metrics["wall_time_s"],
+                                "steps": metrics["steps"],
+                                "final_dist": metrics["final_dist"],
+                                "goal_x": gx,
+                                "goal_y": gy,
+                                "collision_type": metrics.get("collision_type"),
+                                "collision_id": metrics.get("collision_id"),
+                                "reason": metrics.get("reason"),
+                            })
 
 
 
@@ -597,13 +578,13 @@ if __name__ == "__main__":
         print(run_summaries)
         print(f"\nSuccess rate: {successes}/{n_runs} = {success_rate:.2%}")
 
-        # Convert run_summaries to DataFrame (tabelstructuur)
+        # Convert run_summaries to DataFrame
         df = pd.DataFrame(run_summaries)
 
-        # Opslaan als Excel (mooier voor analyse)
+        # Opslaan als Excel 
         # df.to_excel("mpc_results.xlsx", index=False)
 
-        # # Optioneel ook als CSV (lichtgewicht, voor scripts)
+        # # Optioneel ook als CSV 
         timestamp = datetime.now().strftime("%d-%m-%y_%H-%M")
         csv_name = f"MPC_{global_planner}_results_{timestamp}.csv"
         df.to_csv(csv_name, index=False)
