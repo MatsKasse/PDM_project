@@ -123,16 +123,19 @@ def run_albert(n_steps=1000, render=True, path_type="straight", path_length=3.0)
         return x_s, y_s
     
     #Set up obstacles in the environment
+
+    dynamic_obstacle = True
+    nr_dyn_obst = 0
+    if dynamic_obstacle is True:
+        for dyn_obst in dynamic_sphere_obstacles:
+            env.add_obstacle(dyn_obst)
+            nr_dyn_obst += 1
+
     for wall in wall_obstacles:
         env.add_obstacle(wall)
     for cylinder in cylinder_obstacles:
         env.add_obstacle(cylinder)
 
-    dynamic_obstacle = True
-
-    if dynamic_obstacle is True:
-        for dyn_obst in dynamic_sphere_obstacles:
-            env.add_obstacle(dyn_obst)
     for box in box_obstacles:
         env.add_obstacle(box)
     
@@ -158,7 +161,7 @@ def run_albert(n_steps=1000, render=True, path_type="straight", path_length=3.0)
     x_max, y_max, _ = world_max
 
     #Generate gridmap and inflated gridmap
-    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution, robot_radius=robot_radius)
+    grid, inflated_grid = gm.generate_gridmap(x_min, x_max, y_min, y_max, resolution=resolution, robot_radius=robot_radius, nr_dyn_obst=nr_dyn_obst)
 
     #Convert start and goal to grid coordinates
     sx_g, sy_g = world_to_grid(sx, sy, x_min, y_min)    
@@ -344,7 +347,7 @@ if __name__ == "__main__":
         results = []  # store results of multiple runs
 
         for i in range(3):  # run multiple trials
-            result = run_albert(n_steps=3000, render=False)
+            result = run_albert(n_steps=3000, render=True)
             results.append(result)
 
         planned_path_xy = result["planned_path"]  # from A*
