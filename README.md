@@ -16,7 +16,7 @@ The system combines:
 - **Physics-based simulation (PyBullet)**
 
 The framework is designed for **quantitative benchmarking** of different global planners under identical local control and environment conditions.
-The system was developed within the TU Delft MSc Robotics PDM project.
+The system was developed within the TU Delft MSc Robotics PDM project. The final grade granted for this project was a 9.2.
 
 ---
 
